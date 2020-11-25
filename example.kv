@@ -1,0 +1,20 @@
+AnchorLayout:
+    anchor_x: 'center'
+    anchor_y: 'center'
+    Button:
+        height: 40
+        width: 100
+        size_hint: (None, None)
+        text: 'Click Me'
+        on_press: app.process_button_click()
+
+<PopupBox>:
+    progress_bar: _progress_boy
+    size_hint: .5, .5
+    auto_dismiss: True
+    title: 'Status'   
+
+    BoxLayout:
+        orientation: "vertical"
+        ProgressBar:
+            id: _progress_boy

@@ -1,0 +1,4 @@
+imutils==0.5.3
+Kivy==2.0.0rc4
+opencv-python==4.4.0.46
+tqdm==4.51.0
