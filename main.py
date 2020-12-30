@@ -1,6 +1,7 @@
 import threading
 import time
-from multiprocessing import Pool
+from multiprocessing import Pool, Value
+from ctypes import c_bool
 import os
 
 from imutils import paths
@@ -8,7 +9,7 @@ from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.logger import Logger
 from kivy.uix.scatter import Scatter
-from kivy.properties import StringProperty, ObjectProperty, ListProperty, BooleanProperty
+from kivy.properties import StringProperty, ObjectProperty, ListProperty, BooleanProperty, BoundedNumericProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.progressbar import ProgressBar
 from kivy.event import EventDispatcher
@@ -36,8 +37,9 @@ class DuplicateFinderScreen(Screen):
 
     def increment_progress(self, val=1):
         self.progress_bar.value += val
-    
 
+
+"""
 class FindDuplicateProgress():
     def __init__(self, current=0, max=100):
         self._max = 100
@@ -72,13 +74,17 @@ class FindDuplicateProgress():
             self._current = current
         else:
             raise ValueError(f"Cannot set current value greater than max {self.max} or less than 0")
+"""
 
 class FindDuplicateDispatcher(Widget):
-    duplicateImages = ListProperty()
-    progress = ObjectProperty(baseclass=FindDuplicateProgress)
-    running = BooleanProperty()
-    finished = BooleanProperty()
-    cancel = BooleanProperty()
+    """
+    Abstract Base Class for a Duplicate Image Finder
+    """
+    duplicateImages = ListProperty([])
+    progress = BoundedNumericProperty(0,min=0,max=100)
+    running = BooleanProperty(False)
+    finished = BooleanProperty(False)
+    cancel = BooleanProperty(False)
     
     def __init__(self, **kwargs):
         super(FindDuplicateDispatcher, self).__init__(**kwargs)
@@ -97,15 +103,24 @@ class FindDuplicateDispatcher(Widget):
             raise ValueError(f"image_paths must be a list of strings but got {image_paths}")
         if self.running:
             raise RuntimeError("Cannot start a duplicate image search while a search is in progress")
+        
+        # Set running tokens
+        self.finished =  False
+        self.running = True
+        self.cancel = False
+
         # Set max progress
-        self.progress = FindDuplicateProgress()
-        self.progress.max = len(image_paths)
+        self.progress = 1
+        #self.property('progress').set_max(self, len(image_paths))
+        
+        
         # Start the duplicate finding thread
         self.duplicateImages = []
-        self.thread = threading.Thread(target=self.__find_duplicates__)
+        self.thread = threading.Thread(target=self.__find_duplicates__, args=(image_paths,))
         self.thread.start()
+        
 
-    def __find_duplicates__(self, **kwargs):
+    def __find_duplicates__(self, image_paths, **kwargs):
         """Finds all of the duplicate items in the image list and stores them in duplicate
         Called internally as a seperate thread
         """
@@ -113,6 +128,72 @@ class FindDuplicateDispatcher(Widget):
     
     def stop(self):
         self.cancel = True
+    
+    def on_cancel(self, instance, pos):
+        """ Performs operations to halt __find_duplicates__ in its tracks """
+        raise NotImplementedError
+
+
+class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
+    def __init__(self, num_threads=4, **kwargs):
+        super().__init__(**kwargs)
+        self.hashes = dict()
+        self.num_threads = num_threads
+        self.cancel_shared = Value(c_bool,self.cancel)
+    
+    def __find_duplicates__(self, image_paths, **kwargs):
+        """Returns a list where each entry is a list of duplicate image paths
+
+        Raises:
+            ThreadInProgressError: Cannot get duplicates while running
+
+        Returns:
+            list[list[str]]: list of duplicates
+        """
+        # TODO: Add error handling to improper images or improper paths
+        # Compute hashes
+        with Pool(processes=self.num_threads) as pool:
+            multiple_results = [pool.apply_async(image_hashing.async_open_and_hash, (image_path, 16))
+                                for image_path in image_paths]
+            for res in multiple_results:
+                print("hey")
+                # Check cancelation token
+                if self.cancel_shared:
+                    break
+                
+                # Get results and perform hash
+                result = res.get()
+                if result is not None:
+                    hash_val,image_path = result
+                    # grab all image paths with that hash_val, add the current image
+                    # path to it, and store the list back in the hashes dictionary
+                    p = self.hashes.get(hash_val, [])
+                    p.append(image_path)
+                    self.hashes[hash_val] = p
+
+                # update progress
+                self.progress = self.progress + 1
+                print("yo")
+            
+            else:
+                # Completed duplicate image search
+                # set duplicates
+                self.duplicateImages = [images for images in self.hashes.values() if len(images) > 1]
+                
+        # set running and finished
+        self.finished = True
+        self.running = False
+    
+    def on_cancel(self, instance, pos):
+        """ Performs operations to halt __find_duplicates__ in its tracks """
+        print("on_cancel")
+        with self.cancel_shared.get_lock():
+            self.cancel_shared = self.cancel
+    
+    def on_progress(self, instance, pos):
+        print("YO HO IN ON_PROGYBOI")
+
+
 
 class DuplicateFinder(Widget):
     def __init__(self, image_paths=None, screen_name='duplicate_search_screen', **kwargs):
@@ -210,6 +291,7 @@ class HashDuplicateFinder(DuplicateFinder):
             multiple_results = [pool.apply_async(image_hashing.async_open_and_hash, (image_path, 16))
                                 for image_path in self.image_paths]
             for res in multiple_results:
+                print("yup")
                 result = res.get()
                 if result is not None:
                     hash_val,image_path = result
@@ -278,6 +360,31 @@ class DuplicateImageApp(App):
     def build(self):
         return MyScreenManager()
 
+def print_progress(instance, pos):
+    print(instance.progress)
+
+def print_finished(instance, pos):
+    print(instance)
 
 if __name__ == '__main__':
     DuplicateImageApp().run()
+
+    #duplicateFinder = HashFindDuplicateDispatcher()
+    #duplicateFinder.bind(progress=print_progress)
+
+    #duplicateFinder.find(list(paths.list_images("~/Dropbox/Images")))
+
+    #time.sleep(5)
+
+    #duplicateFinder.stop()
+    #print("Yup")
+
+    #time.sleep(1)
+
+    #duplicateFinder.find(list(paths.list_images("~/Dropbox/Images")))
+
+    #time.sleep(5)
+
+    #duplicateFinder.stop()
+    #print("Yup")
+
