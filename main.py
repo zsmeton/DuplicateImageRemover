@@ -8,9 +8,10 @@ from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.logger import Logger
 from kivy.uix.scatter import Scatter
-from kivy.properties import StringProperty, ObjectProperty
+from kivy.properties import StringProperty, ObjectProperty, ListProperty, BooleanProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.progressbar import ProgressBar
+from kivy.event import EventDispatcher
 from kivy.clock import Clock
 
 import image_hashing
@@ -36,6 +37,82 @@ class DuplicateFinderScreen(Screen):
     def increment_progress(self, val=1):
         self.progress_bar.value += val
     
+
+class FindDuplicateProgress():
+    def __init__(self, current=0, max=100):
+        self._max = 100
+        self._current = 0
+        # Set max before current to avoid current getting set out of bounds before max is increased
+        self.max = 100
+        self.current = 0
+    
+    @property
+    def max(self):
+        return self._max
+
+    @max.setter
+    def max(self, max):
+        # TODO: add type check
+        # Error checks
+        if max < 0:
+            raise ValueError(f"Cannot set max to less than 0 {max}")
+        if self.current > max:
+            raise ValueError(f"Cannot set max {max} to less than current {self.current}")
+        # Set it
+        self._max = max
+    
+    @property
+    def current(self):
+        return self._current
+    
+    @current.setter
+    def current(self, current):
+         # TODO: add type 
+        if current <= self.max and current >= 0:
+            self._current = current
+        else:
+            raise ValueError(f"Cannot set current value greater than max {self.max} or less than 0")
+
+class FindDuplicateDispatcher(Widget):
+    duplicateImages = ListProperty()
+    progress = ObjectProperty(baseclass=FindDuplicateProgress)
+    running = BooleanProperty()
+    finished = BooleanProperty()
+    cancel = BooleanProperty()
+    
+    def __init__(self, **kwargs):
+        super(FindDuplicateDispatcher, self).__init__(**kwargs)
+    
+    def find(self, image_paths):
+        """Starts a thread to find which images from the image path are duplicates
+
+        Args:
+            image_paths (list[str]): A list of paths to images
+
+        Raises:
+            ValueError: Thrown when the image paths are invalid (not a list of strings)
+            RuntimeError: Thrown if the logic tries to find images while the finder is already working
+        """
+        if not isinstance(image_paths, list) or not all([isinstance(path, str) for path in image_paths]):
+            raise ValueError(f"image_paths must be a list of strings but got {image_paths}")
+        if self.running:
+            raise RuntimeError("Cannot start a duplicate image search while a search is in progress")
+        # Set max progress
+        self.progress = FindDuplicateProgress()
+        self.progress.max = len(image_paths)
+        # Start the duplicate finding thread
+        self.duplicateImages = []
+        self.thread = threading.Thread(target=self.__find_duplicates__)
+        self.thread.start()
+
+    def __find_duplicates__(self, **kwargs):
+        """Finds all of the duplicate items in the image list and stores them in duplicate
+        Called internally as a seperate thread
+        """
+        raise NotImplementedError
+    
+    def stop(self):
+        self.cancel = True
 
 class DuplicateFinder(Widget):
     def __init__(self, image_paths=None, screen_name='duplicate_search_screen', **kwargs):
