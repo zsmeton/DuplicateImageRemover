@@ -38,44 +38,6 @@ class DuplicateFinderScreen(Screen):
     def increment_progress(self, val=1):
         self.progress_bar.value += val
 
-
-"""
-class FindDuplicateProgress():
-    def __init__(self, current=0, max=100):
-        self._max = 100
-        self._current = 0
-        # Set max before current to avoid current getting set out of bounds before max is increased
-        self.max = 100
-        self.current = 0
-    
-    @property
-    def max(self):
-        return self._max
-
-    @max.setter
-    def max(self, max):
-        # TODO: add type check
-        # Error checks
-        if max < 0:
-            raise ValueError(f"Cannot set max to less than 0 {max}")
-        if self.current > max:
-            raise ValueError(f"Cannot set max {max} to less than current {self.current}")
-        # Set it
-        self._max = max
-    
-    @property
-    def current(self):
-        return self._current
-    
-    @current.setter
-    def current(self, current):
-         # TODO: add type 
-        if current <= self.max and current >= 0:
-            self._current = current
-        else:
-            raise ValueError(f"Cannot set current value greater than max {self.max} or less than 0")
-"""
-
 class FindDuplicateDispatcher(Widget):
     """
     Abstract Base Class for a Duplicate Image Finder
