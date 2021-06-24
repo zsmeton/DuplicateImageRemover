@@ -3,6 +3,7 @@ import time
 from multiprocessing import Pool, Value
 from ctypes import c_bool
 import os
+import functools
 
 from imutils import paths
 from kivy.app import App
@@ -14,7 +15,7 @@ from kivy.properties import StringProperty, ObjectProperty, ListProperty, Boolea
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.progressbar import ProgressBar
 from kivy.event import EventDispatcher
-from kivy.clock import Clock
+from kivy.clock import Clock, mainthread
 
 import image_hashing
 
@@ -27,6 +28,8 @@ import image_hashing
 # TODO: Make a widget which is the loading bar, pause/play, and cancel button which is also a child of DuplicateDispatcher
 
 # TODO: Add in pause and resume buttons
+
+# TODO: Try using thread pool for threading find duplicates instead of thread
 
 class Progress:
     def __init__(self, current=0, max_amount=100):
@@ -80,6 +83,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         self.register_event_type('on_finish')
         super(FindDuplicateDispatcher, self).__init__(**kwargs)
 
+    @mainthread
     def find(self, image_paths):
         """Starts a thread to find which images from the image path are duplicates
 
@@ -101,6 +105,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         # Start the duplicate finding thread
         self.duplicate_images = []
         self.thread = threading.Thread(target=self.__find_duplicates__, args=(image_paths,))
+        self.thread.daemon = True
         self.thread.start()
 
         # change state and dispatch events
@@ -114,6 +119,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         """
         raise NotImplementedError
 
+    @mainthread
     def stop(self):
         """ Pauses the current thread finding the duplicate images
         """
@@ -125,6 +131,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         self.state = 'stopped'
         self.dispatch('on_stop')
 
+    @mainthread
     def cancel(self):
         """Cancels the current thread finding the duplicate images should kill the corresponding thread as well
         """
@@ -136,6 +143,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         self.state = 'canceled'
         self.dispatch('on_cancel')
 
+    @mainthread
     def resume(self):
         """Resumes the current thread which was finding duplicate images
         """
@@ -150,28 +158,33 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
     # TODO: Look into if default handlers are always called
     # TODO: Add transition checking to default event handlers
 
+    @mainthread
     def on_start(self, *args):
         """ Default start handler """
         self.state = 'running'
 
+    @mainthread
     def on_stop(self, *args):
         """ Default stop handler """
         self.state = 'stopped'
 
+    @mainthread
     def on_cancel(self, *args):
         """ Default cancel handler """
         self.state = 'canceled'
-        #self.thread.join()
+        self.thread.join()
 
+    @mainthread
     def on_resume(self, *args):
         """ Default resume handler """
         self.state = 'running'
 
+    @mainthread
     def on_finish(self, *args):
         """ Default finish handler
         """
         self.state = 'finished'
-        #self.thread.join()
+        self.thread.join()
 
 
 class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
@@ -196,46 +209,38 @@ class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
 
         # Compute hashes
         pool = Pool(processes=self.num_threads)
-        multiple_results = [pool.apply_async(image_hashing.async_open_and_hash, (image_path, 16))
-                            for image_path in image_paths]
+        partial_hash = functools.partial(image_hashing.async_open_and_hash, hash_size=16)
+        results = pool.imap_unordered(partial_hash, image_paths)
+        pool.close()
 
-        # Get iterator to pool
-        result_iter = iter(multiple_results)
-        # Grab results unless stopped or canceled
-        while True:
-            if self.state == 'stopped':
+        for result in results:
+            while self.state == 'stopped':
                 continue
-            elif self.state == 'canceled':
-
+            if self.state == 'canceled':
                 # stop the pool and exit the loop
                 pool.terminate()
+                pool.join()
                 break
             else:
-                try:
-                    # Get results and perform hash
-                    result = next(result_iter).get()
+                if result is not None:
+                    hash_val, image_path = result
+                    # grab all image paths with that hash_val, add the current image
+                    # path to it, and store the list back in the hashes dictionary
+                    p = self.hashes.get(hash_val, [])
+                    p.append(image_path)
+                    self.hashes[hash_val] = p
 
-                    if result is not None:
-                        hash_val, image_path = result
-                        # grab all image paths with that hash_val, add the current image
-                        # path to it, and store the list back in the hashes dictionary
-                        p = self.hashes.get(hash_val, [])
-                        p.append(image_path)
-                        self.hashes[hash_val] = p
+                # update progress
+                self.progress = Progress(current=self.progress.current + 1, max_amount=self.progress.max)
+        else:
+            pool.join()
+            # Completed duplicate image search
+            # set duplicates
+            self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]
+            # set state to finished and call finished event
+            self.state = 'finished'
+            self.dispatch('on_finish', self.duplicate_images)
 
-                    # update progress
-                    self.progress = Progress(current=self.progress.current + 1, max_amount=self.progress.max)
-                except StopIteration:
-                    # Completed duplicate image search
-                    # set duplicates
-                    self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]
-                    # set state to finished and call finished event
-                    self.state = 'finished'
-                    self.dispatch('on_finish', self.duplicate_images)
-                    # stop the pool and exit the loop
-                    pool.close()
-                    pool.join()
-                    return
 
 
 class DuplicateFinderScreen(Screen):
@@ -252,23 +257,29 @@ class DuplicateFinderScreen(Screen):
         self.duplicate_image_finder.bind(on_finish=self.search_finished)
         self.add_widget(self.duplicate_image_finder)
 
+    @mainthread
     def on_progress(self, instance, *args):
         # TODO: add error handling for val
         self.progress_bar.max = instance.progress.max
         self.progress_bar.value = instance.progress.current
 
+    @mainthread
     def start_search(self, images):
         self.duplicate_image_finder.find(images)
 
+    @mainthread
     def stop_search(self):
         self.duplicate_image_finder.stop()
 
+    @mainthread
     def cancel_search(self):
         self.duplicate_image_finder.cancel()
 
+    @mainthread
     def resume_search(self):
         self.duplicate_image_finder.resume()
 
+    @mainthread
     def search_finished(self, instance, duplicate_images):
         self.manager.search_finished(duplicate_images)
 
@@ -306,16 +317,19 @@ class MyScreenManager(ScreenManager):
         # Set screen to start menu to start
         self.current = 'start_menu'
 
+    @mainthread
     def cancel_search(self):
         self.loading_screen.cancel_search()
         self.current = 'start_menu'
 
+    @mainthread
     def start_search(self, search_directory):
         # TODO: Add error handling
         image_paths = list(paths.list_images(search_directory))
         self.current = 'loading_screen'
         self.loading_screen.start_search(image_paths)
 
+    @mainthread
     def search_finished(self, duplicate_images):
         print(duplicate_images)
         # TODO: Add error handling
