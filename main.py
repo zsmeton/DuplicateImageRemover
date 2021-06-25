@@ -4,8 +4,12 @@ from multiprocessing import Pool, Value
 from ctypes import c_bool
 import os
 import functools
+import platform
 
 from imutils import paths
+from kivy.config import Config
+
+Config.set('graphics', 'fullscreen', '0')
 from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.logger import Logger
@@ -81,6 +85,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         self.register_event_type('on_stop')
         self.register_event_type('on_cancel')
         self.register_event_type('on_finish')
+        self.thread = None
         super(FindDuplicateDispatcher, self).__init__(**kwargs)
 
     @mainthread
@@ -172,7 +177,8 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
     def on_cancel(self, *args):
         """ Default cancel handler """
         self.state = 'canceled'
-        self.thread.join()
+        if self.thread and platform.system() == 'Windows':
+            self.thread.join()
 
     @mainthread
     def on_resume(self, *args):
@@ -184,7 +190,8 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         """ Default finish handler
         """
         self.state = 'finished'
-        self.thread.join()
+        if self.thread and platform.system() == 'Windows':
+            self.thread.join()
 
 
 class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
@@ -219,7 +226,8 @@ class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
             if self.state == 'canceled':
                 # stop the pool and exit the loop
                 pool.terminate()
-                pool.join()
+                if platform.system() == 'Windows':
+                    pool.join()
                 break
             else:
                 if result is not None:
@@ -240,7 +248,6 @@ class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
             # set state to finished and call finished event
             self.state = 'finished'
             self.dispatch('on_finish', self.duplicate_images)
-
 
 
 class DuplicateFinderScreen(Screen):
