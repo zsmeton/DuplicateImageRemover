@@ -15,7 +15,7 @@ from kivy.uix.widget import Widget
 from kivy.logger import Logger
 from kivy.uix.scatter import Scatter
 from kivy.properties import StringProperty, ObjectProperty, ListProperty, BooleanProperty, BoundedNumericProperty, \
-    OptionProperty
+    OptionProperty, AliasProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.progressbar import ProgressBar
 from kivy.event import EventDispatcher
@@ -24,16 +24,9 @@ from kivy.clock import Clock, mainthread
 import image_hashing
 
 
-# TODO: Fix logic so that we use changes to properties to change screens from duplicate image finder (maybe do some doodling)
-# TODO: Using properties like running, finished, found_duplicates, canceled
-
-# TODO: Change logic so that screen changes occur via events
-
-# TODO: Make a widget which is the loading bar, pause/play, and cancel button which is also a child of DuplicateDispatcher
-
+# TODO: Change logic so that screen changes occur via events (using kv file instead of hard coded)
+# TODO: Make a widget which is the loading bar, pause/play, and cancel button which contains a DuplicateDispatcher
 # TODO: Add in pause and resume buttons
-
-# TODO: Try using thread pool for threading find duplicates instead of thread
 
 class Progress:
     def __init__(self, current=0, max_amount=100):
@@ -71,24 +64,40 @@ class Progress:
             raise ValueError(f"Cannot set current value greater than max {self.max} or less than 0")
 
 
-# TODO: Change logic so that the state is set by the events
+# TODO: Make a custom property for state so I can keep an old state variable, enforce changes with error handling,
+# TODO: and automatically call on_{change} events
 class FindDuplicateDispatcher(Widget, EventDispatcher):
     """
     Abstract Base Class for a Duplicate Image Finder
     """
     duplicate_images = ListProperty([])
     progress = ObjectProperty(baseclass=Progress)
-    state = OptionProperty('rest', options=['rest', 'running', 'stopped', 'canceled', 'finished'])
 
     def __init__(self, **kwargs):
         self.register_event_type('on_start')
         self.register_event_type('on_stop')
         self.register_event_type('on_cancel')
         self.register_event_type('on_finish')
-        self.thread = None
+        self.register_event_type('on_resume')
         super(FindDuplicateDispatcher, self).__init__(**kwargs)
 
-    @mainthread
+        # Member variables
+        self.thread = None
+        self._state_options = ['rest', 'running', 'stopped', 'canceled', 'finished']
+        # rest -> running
+        # running -> stopped, canceled, finished
+        # stopped -> running, canceled
+        # canceled -> running
+        # finished -> running
+        self._state_transitions = {'rest': {'running': 'on_start'},
+                                   'running': {'stopped': 'on_stop', 'canceled': 'on_cancel', 'finished': 'on_finish'},
+                                   'stopped': {'running': 'on_resume', 'canceled': 'on_cancel'},
+                                   'canceled': {'running': 'on_start'},
+                                   'finished': {'running': 'on_start'}
+                                   }
+        self._state = 'rest'
+
+    # Controls #
     def find(self, image_paths):
         """Starts a thread to find which images from the image path are duplicates
 
@@ -113,9 +122,8 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         self.thread.daemon = True
         self.thread.start()
 
-        # change state and dispatch events
+        # change state
         self.state = 'running'
-        self.dispatch('on_start', image_paths)
 
     def __find_duplicates__(self, image_paths, **kwargs):
         """Finds all of the duplicate items in the image list and stores them in duplicate
@@ -128,68 +136,72 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
     def stop(self):
         """ Pauses the current thread finding the duplicate images
         """
-        # Check for valid transition
-        if self.state != 'running':
-            raise RuntimeError(f"Cannot transition from {self.state} to stopped")
-
-        # change state and dispatch events
+        # change state
         self.state = 'stopped'
-        self.dispatch('on_stop')
 
     @mainthread
     def cancel(self):
-        """Cancels the current thread finding the duplicate images should kill the corresponding thread as well
         """
-        # Check for valid transition
-        if self.state != 'running' and self.state != 'stopped':
-            raise RuntimeError(f"Cannot transition from {self.state} to canceled")
-
-        # change state, stop the thread, and dispatch events
+        Cancels the current thread finding the duplicate images should kill the corresponding thread as well
+        """
+        # change state
         self.state = 'canceled'
-        self.dispatch('on_cancel')
 
     @mainthread
     def resume(self):
         """Resumes the current thread which was finding duplicate images
         """
-        # Check for valid transition
-        if self.state != 'stopped':
-            raise RuntimeError(f"Cannot transition from {self.state} to running using resume")
-
-        # change state and dispatch events
+        # change state
         self.state = 'running'
-        self.dispatch('on_resume')
 
-    # TODO: Look into if default handlers are always called
-    # TODO: Add transition checking to default event handlers
+    # Getters and Setters #
+    def get_state(self):
+        return self._state
 
+    def set_state(self, next_state):
+        # Ensure next_state is a valid option
+        if next_state not in self._state_options:
+            raise ValueError(f"Invalid state cannot set state to {next_state}")
+
+        # Change the state by
+        #   Performing transition checks
+        if next_state not in self._state_transitions[self._state]:
+            raise ValueError(f"Invalid transition cannot set state to {next_state} from {self._state}")
+        #   Setting the next_state
+        old_next_state = self._state
+        self._state = next_state
+        #   Dispatching the transition event
+        self.dispatch(self._state_transitions[old_next_state][next_state])
+
+    # Create state member
+    state = AliasProperty(get_state, set_state, bind=[])
+
+    # Events #
     @mainthread
     def on_start(self, *args):
         """ Default start handler """
-        self.state = 'running'
+        pass
 
     @mainthread
     def on_stop(self, *args):
         """ Default stop handler """
-        self.state = 'stopped'
+        pass
 
     @mainthread
     def on_cancel(self, *args):
         """ Default cancel handler """
-        self.state = 'canceled'
         if self.thread and platform.system() == 'Windows':
             self.thread.join()
 
     @mainthread
     def on_resume(self, *args):
         """ Default resume handler """
-        self.state = 'running'
+        pass
 
     @mainthread
     def on_finish(self, *args):
         """ Default finish handler
         """
-        self.state = 'finished'
         if self.thread and platform.system() == 'Windows':
             self.thread.join()
 
@@ -247,7 +259,6 @@ class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
             self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]
             # set state to finished and call finished event
             self.state = 'finished'
-            self.dispatch('on_finish', self.duplicate_images)
 
 
 class DuplicateFinderScreen(Screen):
@@ -264,31 +275,25 @@ class DuplicateFinderScreen(Screen):
         self.duplicate_image_finder.bind(on_finish=self.search_finished)
         self.add_widget(self.duplicate_image_finder)
 
-    @mainthread
     def on_progress(self, instance, *args):
         # TODO: add error handling for val
         self.progress_bar.max = instance.progress.max
         self.progress_bar.value = instance.progress.current
 
-    @mainthread
     def start_search(self, images):
         self.duplicate_image_finder.find(images)
 
-    @mainthread
     def stop_search(self):
         self.duplicate_image_finder.stop()
 
-    @mainthread
     def cancel_search(self):
         self.duplicate_image_finder.cancel()
 
-    @mainthread
     def resume_search(self):
         self.duplicate_image_finder.resume()
 
-    @mainthread
-    def search_finished(self, instance, duplicate_images):
-        self.manager.search_finished(duplicate_images)
+    def search_finished(self, instance):
+        self.manager.search_finished(instance.duplicate_images)
 
 
 class Picture(Widget):
@@ -324,19 +329,16 @@ class MyScreenManager(ScreenManager):
         # Set screen to start menu to start
         self.current = 'start_menu'
 
-    @mainthread
     def cancel_search(self):
         self.loading_screen.cancel_search()
         self.current = 'start_menu'
 
-    @mainthread
     def start_search(self, search_directory):
         # TODO: Add error handling
         image_paths = list(paths.list_images(search_directory))
         self.current = 'loading_screen'
         self.loading_screen.start_search(image_paths)
 
-    @mainthread
     def search_finished(self, duplicate_images):
         print(duplicate_images)
         # TODO: Add error handling
