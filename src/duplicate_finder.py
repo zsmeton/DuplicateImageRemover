@@ -13,14 +13,14 @@ from src import image_hashing
 from src.progress import Progress
 
 
-
-# TODO: Add in pause and resume buttons
 # TODO: Add widget which shows estimate and done/current
 class DuplicateFinder(BoxLayout, EventDispatcher):
     """
     Abstract Base Class for a Duplicate Image Finder
     """
     duplicate_images = ListProperty([])
+    start_icon = '>'
+    stop_icon = '||'
 
     def __init__(self, **kwargs):
         self.register_event_type('on_start')
@@ -62,9 +62,10 @@ class DuplicateFinder(BoxLayout, EventDispatcher):
         if self.state == "running" or self.state == "stopped":
             raise RuntimeError(f"Cannot transition from {self.state} to running using find")
 
-        # Set max progress
+        # Set max progress and pause play button
         self.ids.progress_bar.max = len(image_paths)
         self.ids.progress_bar.value = 0
+        self.ids.start_stop_button.text = self.stop_icon
 
         # Start the duplicate finding thread
         self.duplicate_images = []
@@ -81,6 +82,15 @@ class DuplicateFinder(BoxLayout, EventDispatcher):
         when complete
         """
         raise NotImplementedError
+
+    @mainthread
+    def start_stop(self):
+        if self.state == 'running':
+            self.stop()
+            self.ids.start_stop_button.text = self.start_icon
+        elif self.state == 'stopped':
+            self.resume()
+            self.ids.start_stop_button.text = self.stop_icon
 
     @mainthread
     def stop(self):
