@@ -7,18 +7,20 @@ from kivy.uix.widget import Widget
 from kivy.properties import ObjectProperty, ListProperty, AliasProperty
 from kivy.event import EventDispatcher
 from kivy.clock import mainthread
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from src import image_hashing
 from src.progress import Progress
 
 
-# TODO: Make a widget which is the loading bar, pause/play, and cancel button which contains a DuplicateDispatcher
+
 # TODO: Add in pause and resume buttons
-class FindDuplicateDispatcher(Widget, EventDispatcher):
+# TODO: Add widget which shows estimate and done/current
+class DuplicateFinder(BoxLayout, EventDispatcher):
     """
     Abstract Base Class for a Duplicate Image Finder
     """
     duplicate_images = ListProperty([])
-    progress = ObjectProperty(baseclass=Progress)
 
     def __init__(self, **kwargs):
         self.register_event_type('on_start')
@@ -26,7 +28,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
         self.register_event_type('on_cancel')
         self.register_event_type('on_finish')
         self.register_event_type('on_resume')
-        super(FindDuplicateDispatcher, self).__init__(**kwargs)
+        super(DuplicateFinder, self).__init__(**kwargs)
 
         # Member variables
         self.thread = None
@@ -61,7 +63,8 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
             raise RuntimeError(f"Cannot transition from {self.state} to running using find")
 
         # Set max progress
-        self.progress = Progress(current=0, max_amount=len(image_paths))
+        self.ids.progress_bar.max = len(image_paths)
+        self.ids.progress_bar.value = 0
 
         # Start the duplicate finding thread
         self.duplicate_images = []
@@ -153,7 +156,7 @@ class FindDuplicateDispatcher(Widget, EventDispatcher):
             self.thread.join()
 
 
-class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
+class HashDuplicateFinder(DuplicateFinder):
     def __init__(self, num_threads=4, **kwargs):
         super().__init__(**kwargs)
         self.hashes = dict()
@@ -198,7 +201,7 @@ class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
                     self.hashes[hash_val] = p
 
                 # update progress
-                self.progress = Progress(current=self.progress.current + 1, max_amount=self.progress.max)
+                self.ids.progress_bar.value = self.ids.progress_bar.value + 1
         else:
             pool.join()
             # Completed duplicate image search

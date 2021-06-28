@@ -22,28 +22,26 @@
                 on_release: root.manager.start_search(filechooser.path)
 
 
+<DuplicateFinder>:
+    padding: 10
+    spacing: 10
+    ProgressBar:
+        id: progress_bar
+    Button:
+        size: (40, 40)
+        size_hint: (None, None)
+        pos_hint: {'center_y': 0.5}
+        text: "x"
+        on_release: root.cancel()
+
+
 <ManageDuplicatesScreen>:
     BoxLayout:
         size: root.size
         pos: root.pos
-        
+
         Button:
             text: "Yay"
-
-<DuplicateFinderScreen>:
-    # TODO: fix button and progress bar layout
-    progress_bar: _progress_bar
-    AnchorLayout:
-        anchor_x: 'center'
-        anchor_y: 'center'
-        ProgressBar:
-            id: _progress_bar
-    AnchorLayout:
-        anchor_x: 'right'
-        anchor_y: 'center'
-        Button:
-            text: "Cancel"
-            on_release: root.manager.cancel_search()
             
 
 <Picture>:

@@ -9,7 +9,7 @@ from kivy.uix.widget import Widget
 from kivy.properties import StringProperty, ObjectProperty, ListProperty, AliasProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
 
-from src.duplicate_finder import FindDuplicateDispatcher, HashFindDuplicateDispatcher
+from src.duplicate_finder import DuplicateFinder, HashDuplicateFinder
 from src.duplicate_finder_screen import DuplicateFinderScreen
 
 # TODO: Make FindDuplicateDispatcher a widget with progress bar and buttons which DuplicateFinderScreen contains
@@ -40,7 +40,7 @@ class MyScreenManager(ScreenManager):
         # self.search_directory = "/home/zsmeton/Dropbox/Images/google_dup/"
         self.add_widget(StartMenuScreen(name='start_menu'))
         self.add_widget(ManageDuplicatesScreen(name='manage_duplicates'))
-        self.loading_screen = DuplicateFinderScreen(duplicate_image_finder=HashFindDuplicateDispatcher(),
+        self.loading_screen = DuplicateFinderScreen(duplicate_image_finder=HashDuplicateFinder(),
                                                     name='loading_screen')
         self.add_widget(self.loading_screen)
         self.duplicates = None
@@ -49,11 +49,12 @@ class MyScreenManager(ScreenManager):
         self.current = 'start_menu'
 
     def cancel_search(self):
-        self.loading_screen.cancel_search()
         self.current = 'start_menu'
 
     def start_search(self, search_directory):
+        print(search_directory)
         # TODO: Add error handling
+        search_directory = "C:\\Users\\zsmet\\Pictures\\Saved Pictures"
         image_paths = list(paths.list_images(search_directory))
         self.current = 'loading_screen'
         self.loading_screen.start_search(image_paths)
