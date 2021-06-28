@@ -1,71 +1,18 @@
 import threading
-import time
-from multiprocessing import Pool, Value
-from ctypes import c_bool
-import os
-import functools
+from multiprocessing import Pool
 import platform
+import functools
 
-from imutils import paths
-from kivy.config import Config
-
-Config.set('graphics', 'fullscreen', '0')
-from kivy.app import App
 from kivy.uix.widget import Widget
-from kivy.logger import Logger
-from kivy.uix.scatter import Scatter
-from kivy.properties import StringProperty, ObjectProperty, ListProperty, BooleanProperty, BoundedNumericProperty, \
-    OptionProperty, AliasProperty
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.uix.progressbar import ProgressBar
+from kivy.properties import ObjectProperty, ListProperty, AliasProperty
 from kivy.event import EventDispatcher
-from kivy.clock import Clock, mainthread
+from kivy.clock import mainthread
+from src import image_hashing
+from src.progress import Progress
 
-import image_hashing
 
-
-# TODO: Change logic so that screen changes occur via events (using kv file instead of hard coded)
 # TODO: Make a widget which is the loading bar, pause/play, and cancel button which contains a DuplicateDispatcher
 # TODO: Add in pause and resume buttons
-
-class Progress:
-    def __init__(self, current=0, max_amount=100):
-        self._current = 0
-        self._max = 100
-        # Set max before current to avoid current getting set out of bounds before max is increased
-        self.max = max_amount
-        self.current = current
-
-    @property
-    def max(self):
-        return self._max
-
-    @max.setter
-    def max(self, max):
-        # TODO: add type check
-        # Error checks
-        if max < 0:
-            raise ValueError(f"Cannot set max to less than 0 {max}")
-        if self.current > max:
-            raise ValueError(f"Cannot set max {max} to less than current {self.current}")
-        # Set it
-        self._max = max
-
-    @property
-    def current(self):
-        return self._current
-
-    @current.setter
-    def current(self, current):
-        # TODO: add type check
-        if self.max >= current >= 0:
-            self._current = current
-        else:
-            raise ValueError(f"Cannot set current value greater than max {self.max} or less than 0")
-
-
-# TODO: Make a custom property for state so I can keep an old state variable, enforce changes with error handling,
-# TODO: and automatically call on_{change} events
 class FindDuplicateDispatcher(Widget, EventDispatcher):
     """
     Abstract Base Class for a Duplicate Image Finder
@@ -259,115 +206,3 @@ class HashFindDuplicateDispatcher(FindDuplicateDispatcher):
             self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]
             # set state to finished and call finished event
             self.state = 'finished'
-
-
-class DuplicateFinderScreen(Screen):
-    # TODO: Add loading bar message 
-    # TODO: (files finished, files to go, predicted time to finish)
-    progress_bar = ObjectProperty()
-
-    def __init__(self, duplicate_image_finder: FindDuplicateDispatcher, **kwargs):
-        super(DuplicateFinderScreen, self).__init__(**kwargs)
-        self.progress_bar = ProgressBar()
-        self.add_widget(self.progress_bar)
-        self.duplicate_image_finder = duplicate_image_finder
-        self.duplicate_image_finder.bind(progress=self.on_progress)
-        self.duplicate_image_finder.bind(on_finish=self.search_finished)
-        self.add_widget(self.duplicate_image_finder)
-
-    def on_progress(self, instance, *args):
-        # TODO: add error handling for val
-        self.progress_bar.max = instance.progress.max
-        self.progress_bar.value = instance.progress.current
-
-    def start_search(self, images):
-        self.duplicate_image_finder.find(images)
-
-    def stop_search(self):
-        self.duplicate_image_finder.stop()
-
-    def cancel_search(self):
-        self.duplicate_image_finder.cancel()
-
-    def resume_search(self):
-        self.duplicate_image_finder.resume()
-
-    def search_finished(self, instance):
-        self.manager.search_finished(instance.duplicate_images)
-
-
-class Picture(Widget):
-    source = StringProperty(None)
-
-
-class StartMenuScreen(Screen):
-    # TODO: Fix the buttons add name of software
-    # TODO: Fix file system with touch pad
-    # TODO: add method selector
-    def filter(self, directory, filename):
-        return os.path.isdir(os.path.join(directory, filename))
-
-
-class ManageDuplicatesScreen(Screen):
-    # TODO: Implement the duplicate image selector
-    pass
-
-
-class MyScreenManager(ScreenManager):
-    # TODO: Add config for how long between checking find duplicates
-    # TODO: Add config for screen names
-    def __init__(self, **kwargs):
-        super(MyScreenManager, self).__init__(**kwargs)
-        # self.search_directory = "/home/zsmeton/Dropbox/Images/google_dup/"
-        self.add_widget(StartMenuScreen(name='start_menu'))
-        self.add_widget(ManageDuplicatesScreen(name='manage_duplicates'))
-        self.loading_screen = DuplicateFinderScreen(duplicate_image_finder=HashFindDuplicateDispatcher(),
-                                                    name='loading_screen')
-        self.add_widget(self.loading_screen)
-        self.duplicates = None
-
-        # Set screen to start menu to start
-        self.current = 'start_menu'
-
-    def cancel_search(self):
-        self.loading_screen.cancel_search()
-        self.current = 'start_menu'
-
-    def start_search(self, search_directory):
-        # TODO: Add error handling
-        image_paths = list(paths.list_images(search_directory))
-        self.current = 'loading_screen'
-        self.loading_screen.start_search(image_paths)
-
-    def search_finished(self, duplicate_images):
-        print(duplicate_images)
-        # TODO: Add error handling
-        self.current = 'manage_duplicates'
-
-
-class DuplicateImageApp(App):
-    def build(self):
-        return MyScreenManager()
-
-
-if __name__ == '__main__':
-    DuplicateImageApp().run()
-
-    # duplicateFinder = HashFindDuplicateDispatcher()
-    # duplicateFinder.bind(progress=print_progress)
-
-    # duplicateFinder.find(list(paths.list_images("~/Dropbox/Images")))
-
-    # time.sleep(5)
-
-    # duplicateFinder.stop()
-    # print("Yup")
-
-    # time.sleep(1)
-
-    # duplicateFinder.find(list(paths.list_images("~/Dropbox/Images")))
-
-    # time.sleep(5)
-
-    # duplicateFinder.stop()
-    # print("Yup")

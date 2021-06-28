@@ -2,12 +2,10 @@ from kivy.app import App
 from kivy.uix.popup import Popup
 from kivy.factory import Factory
 from kivy.properties import ObjectProperty
-from kivy.clock import Clock
-from kivy.uix.progressbar import ProgressBar 
+from kivy.uix.progressbar import ProgressBar
 
-import time
 import threading
-from image_hashing import async_open_and_hash
+from src.image_hashing import async_open_and_hash
 from multiprocessing import Pool
 from imutils import paths
 
