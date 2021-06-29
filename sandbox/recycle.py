@@ -7,6 +7,11 @@ from kivy.properties import BooleanProperty
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
+from kivy.uix.screenmanager import Screen
+
+
+from kivy.config import Config
+Config.set('graphics', 'fullscreen', '0')
 
 Builder.load_string('''
 <SelectableLabel>:
@@ -27,6 +32,16 @@ Builder.load_string('''
         orientation: 'vertical'
         multiselect: True
         touch_multiselect: True
+
+<MyScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        RV:
+            id: _recycle_view
+        Button:
+            text: 'Delete'
+            on_release: _recycle_view.remove_selected()
+            
 ''')
 
 
@@ -35,7 +50,7 @@ class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
     ''' Adds selection and focus behaviour to the view. '''
 
 
-class SelectableLabel(RecycleDataViewBehavior, Label):
+class SelectableLabel(Label):
     ''' Add selection support to the Label '''
     index = None
     selected = BooleanProperty(False)
@@ -66,12 +81,25 @@ class SelectableLabel(RecycleDataViewBehavior, Label):
 class RV(RecycleView):
     def __init__(self, **kwargs):
         super(RV, self).__init__(**kwargs)
-        self.data = [{'text': str(x)} for x in range(100)]
+        self.data = [{'text': str(x) + 'hello'} for x in range(100)]
 
+    def remove_selected(self):
+        # Get the selected nodes
+        selected = set(self.layout_manager.selected_nodes)
+        # Get a list without the selected nodes
+        new_data = [val for i,val in enumerate(self.data) if i not in selected]
+        # Deselect the nodes in the manager
+        for idx in selected:
+            self.layout_manager.deselect_node(idx)
+        # Set data to only include none selected nodes
+        self.data = new_data
+
+class MyScreen(Screen):
+    pass
 
 class TestApp(App):
     def build(self):
-        return RV()
+        return MyScreen()
 
 if __name__ == '__main__':
     TestApp().run()
