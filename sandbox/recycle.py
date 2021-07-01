@@ -9,8 +9,8 @@ from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.uix.screenmanager import Screen
 
-
 from kivy.config import Config
+
 Config.set('graphics', 'fullscreen', '0')
 
 Builder.load_string('''
@@ -50,7 +50,7 @@ class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
     ''' Adds selection and focus behaviour to the view. '''
 
 
-class SelectableLabel(Label):
+class SelectableLabel(RecycleDataViewBehavior,Label):
     ''' Add selection support to the Label '''
     index = None
     selected = BooleanProperty(False)
@@ -59,6 +59,7 @@ class SelectableLabel(Label):
     def refresh_view_attrs(self, rv, index, data):
         ''' Catch and handle the view changes '''
         self.index = index
+        self.selected = False
         return super(SelectableLabel, self).refresh_view_attrs(
             rv, index, data)
 
@@ -72,6 +73,7 @@ class SelectableLabel(Label):
     def apply_selection(self, rv, index, is_selected):
         ''' Respond to the selection of items in the view. '''
         self.selected = is_selected
+        rv.data[index]['text'] = 'nope lol'
         if is_selected:
             print("selection changed to {0}".format(rv.data[index]))
         else:
@@ -87,19 +89,22 @@ class RV(RecycleView):
         # Get the selected nodes
         selected = set(self.layout_manager.selected_nodes)
         # Get a list without the selected nodes
-        new_data = [val for i,val in enumerate(self.data) if i not in selected]
+        new_data = [val for i, val in enumerate(self.data) if i not in selected]
         # Deselect the nodes in the manager
         for idx in selected:
             self.layout_manager.deselect_node(idx)
         # Set data to only include none selected nodes
         self.data = new_data
 
+
 class MyScreen(Screen):
     pass
+
 
 class TestApp(App):
     def build(self):
         return MyScreen()
+
 
 if __name__ == '__main__':
     TestApp().run()

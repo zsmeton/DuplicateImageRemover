@@ -57,13 +57,12 @@ Builder.load_string('''
 
 ''')
 
-# TODO: Add deletion behavior
 class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
     ''' Adds selection and focus behaviour to the view. '''
 
 
-class GridDataView(CompoundSelectionBehavior, RecycleDataViewBehavior, GridLayout):
+class GridDataView(RecycleDataViewBehavior, GridLayout):
     selected = BooleanProperty(False)
     selectable = BooleanProperty(True)
     widgetclass = StringProperty('None')
@@ -72,20 +71,26 @@ class GridDataView(CompoundSelectionBehavior, RecycleDataViewBehavior, GridLayou
     def __init__(self, **kwargs):
         super(GridDataView, self).__init__(**kwargs)
         self.index = None
+        self.selected_nodes = {}
 
     def refresh_view_attrs(self, rv, index, data):
         ''' Catch and handle the view changes '''
+        # Set selection
+        self.selected = False
         # Set index
         self.index = index
         # Remove old widgets
         self.clear_widgets()
         self.widgets = []
+        # Set selection
+        self.selected_nodes[self.index] = data.get('selected', set())
         # Add new widgets
         widget_type = Factory.get(self.widgetclass)
         for i, kwargs in enumerate(data['data']):
             new_widget = widget_type(index=i, **kwargs)
             self.add_widget(new_widget)
             self.widgets.append(new_widget)
+            new_widget.apply_selection(i, i in self.selected_nodes[self.index])
 
         return super(GridDataView, self).refresh_view_attrs(rv, index, data)
 
@@ -105,20 +110,34 @@ class GridDataView(CompoundSelectionBehavior, RecycleDataViewBehavior, GridLayou
         # handle my own selection
         if self.selectable:
             # Case 1: currently not selected and should be
-            if not self.selected and self.selected_nodes:
+            if not self.selected and self.selected_nodes.get(self.index, set()):
                 return self.parent.select_with_touch(self.index, touch)
             # Case 2: currently selected and shouldn't be
-            elif self.selected and not self.selected_nodes:
+            elif self.selected and not self.selected_nodes.get(self.index, set()):
                 return self.parent.select_with_touch(self.index, touch)
 
     def select_node(self, node):
-        result = super(GridDataView, self).select_node(node)
-        self.widgets[node].apply_selection(node, result)
-        return result
+        if node not in self.selected_nodes.get(self.index, set()):
+            self.selected_nodes.get(self.index, set()).add(node)
+            self.widgets[node].apply_selection(node, True)
+            return True
+        else:
+            return False
+
+    def deselect_node(self, node):
+        if node not in self.selected_nodes.get(self.index, {}):
+            self.widgets[node].apply_selection(node, False)
+            return False
+        else:
+            self.selected_nodes[self.index].remove(node)
+            self.widgets[node].apply_selection(node, False)
+            return True
 
     def apply_selection(self, rv, index, is_selected):
         ''' Respond to the selection of items in the view. '''
         self.selected = is_selected
+        rv.data[index]['selected'] = self.selected_nodes[index]
+
 
 class SelectableLabel(Label):
     ''' Add selection support to the Label '''
@@ -147,21 +166,21 @@ class RV(RecycleView):
         self.data = [{'data': [{'text': str(i)} for i in range(5)]} for x in range(100)]
 
     def remove_selected(self):
-        # Get the selected nodes
+        # Set data to data without selection
+        new_data = []
+        for i, group in enumerate(self.data):
+            unselected_data = [elem for i,elem in enumerate(group['data']) if i not in group.get('selected',set())]
+            if unselected_data:
+                new_group = {'data': unselected_data}
+                new_data.append(new_group)
+
+        # Clear layout managers selection
         selected = set(self.layout_manager.selected_nodes)
-        print(selected)
-        # For each node
-        #for select in selected:
-        #    if issubclass(select, CompoundSelectionBehavior):
-        #        # perform remove on selected nodes
-        #        self.data[select]
-        # Get a list without the selected nodes
-        #new_data = [val for i, val in enumerate(self.data) if i not in selected]
-        # Deselect the nodes in the manager
-        #for idx in selected:
-        #    self.layout_manager.deselect_node(idx)
-        # Set data to only include none selected nodes
-        #self.data = new_data
+        for select in selected:
+            self.layout_manager.deselect_node(select)
+
+        self.data = new_data
+
 
 
 class MyScreen(Screen):
