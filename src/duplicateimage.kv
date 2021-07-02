@@ -42,13 +42,44 @@
         on_release: root.start_stop()
 
 
-<ManageDuplicatesScreen>:
-    BoxLayout:
-        size: root.size
-        pos: root.pos
+<SelectableLabel>:
+    # Draw a background to indicate selection
+    canvas.before:
+        Color:
+            rgba: (.0, 0.9, .1, .3) if self.selected else (0, 0, 0, 1)
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
+
+<SelectableGridDataView>:
+    widgetclass: 'SelectableLabel'
+    padding: 20
+    cols: 2
+    multiselect: True
+    touch_multiselect: True
+
+
+<DuplicateManager>:
+    viewclass: 'SelectableGridDataView'
+    SelectionRecycleBoxLayout:
+        default_size: None, None
+        default_size_hint: 1, None
+        size_hint_y: None
+        height: self.minimum_height
+        orientation: 'vertical'
+        multiselect: True
+        touch_multiselect: True
+
+
+<DuplicateManagerScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        DuplicateManager:
+            id: _recycle_view
         Button:
-            text: "Yay"
+            text: 'Delete'
+            on_release: _recycle_view.remove_selected()
             
 
 <Picture>:
