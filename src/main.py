@@ -24,9 +24,8 @@ class StartMenuScreen(Screen):
     # TODO: Make directory selection a pop up
     # TODO: Add way to select multiple paths
     # TODO: Add way to include or not include subdirectories
-    #
-    # TODO: add method selector
-    # TODO: Add
+    # TODO: Add progress bar pop up when finding images in each directory is taking a while
+    # TODO: Add method selector
     def filter(self, directory, filename):
         return os.path.isdir(os.path.join(directory, filename))
 

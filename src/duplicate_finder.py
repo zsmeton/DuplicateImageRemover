@@ -12,8 +12,16 @@ from kivy.uix.button import Button
 from src import image_hashing
 from src.progress import Progress
 
-
+# Features
 # TODO: Add widget which shows estimate and done/current
+# TODO: Add back button
+# Refactor
+# TODO: Make duplicate finder follow the MVC design \
+#  Model: Image paths, duplicate images
+#  View: Displays and connects interfaces to progress updates, stop, start, cancel, finish
+#  Controller: Finds duplicate images and updates properties containing its progress
+
+
 class DuplicateFinder(BoxLayout, EventDispatcher):
     """
     Abstract Base Class for a Duplicate Image Finder

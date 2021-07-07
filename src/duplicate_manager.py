@@ -13,10 +13,22 @@ from kivy.properties import StringProperty, NumericProperty
 
 from kivy.factory import Factory
 
+# Optional Hard-Feature
+# TODO: Add undo handling so if ctrl z is pressed the last action is undone \
+#  (for now that could be just restoring the most recently deleted images) \
+#  maybe store those images in a directory and then delete on shutdown, if images are there when the program starts \
+#  could load to screen resuming the session (in case of bad exit)
+
+# Features
 # TODO: Create selectable images class and add deletion of images when delete button pressed
 # TODO: Add slider to control image size
+# TODO: Add preview mode or detailed view mode (size, date created, etc)
+# TODO: Add clear selection button
 # TODO: Add sorting button
-#
+# TODO: Add back button
+
+# Refactor
+# TODO: Restructure this code to be a better design pattern to follow the separation of concerns principle
 
 class SelectionRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
@@ -24,8 +36,9 @@ class SelectionRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
 
 
 class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
-    selected = BooleanProperty(False) # Whether the current view is selected or not
-    selectable = BooleanProperty(True) # Whether the current view can be selected
+    index = NumericProperty(0)  # The selection index for the widget in the recycle view
+    selected = BooleanProperty(False)  # Whether the current view is selected or not
+    selectable = BooleanProperty(True)  # Whether the current view can be selected
     widgetclass = StringProperty('None')  # The type of widgets this grid contains
 
     def __init__(self, **kwargs):
@@ -44,33 +57,20 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
         Returns:
 
         """
-        ''' Catch and handle the view changes '''
-        # Set selection
-        self.selected = False
-        # Set index
+        # Reset the view
         self.index = index
-        # Set selection
+        # Selection status
+        self.selected = len(data.get('selected', set())) > 0
         self.selected_nodes[self.index] = data.get('selected', set())
-        # Remove old widgets
+        # Widgets
         self.clear_widgets()
-        # Add new widgets
-        widget_type = Factory.get(self.widgetclass)
-        for i, kwargs in enumerate(data['data']):
+        widget_type = Factory.get(self.widgetclass)  # Dynamically get the selection status based on the widget class
+        for i, kwargs in enumerate(data['data'][::-1]):
             new_widget = widget_type(index=i, **kwargs)
-            self.add_widget(new_widget)
+            self.add_widget(new_widget, index=i)
             new_widget.apply_selection(i, i in self.selected_nodes[self.index])
 
         return super(SelectableGridDataView, self).refresh_view_attrs(rv, index, data)
-
-    def on_touch_down(self, touch):
-        """
-        Consumes a touch event
-        Args:
-            touch: the touch
-
-        Returns:
-        """
-        return True
 
     def select_with_touch(self, index, touch=None):
         """
@@ -81,8 +81,6 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
 
         Returns: Whether the LayoutSelection selected this grid
         """
-        # TODO: Figure out what this code below is doing
-        print('select_with_touch', self.index, index, self.selected_nodes)
         # toggle selection of the child
         if not self.select_node(index):
             self.deselect_node(index)
@@ -105,11 +103,15 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
 
         Returns:
             True if the node was selected
-            False if it wasn't already
+            False if it was already selected
         """
+        # TODO: Add type error handling
+        if node >= len(self.children) or node < 0:
+            raise ValueError(f"Invalid node index of {node} with {len(self.children)} selectable nodes")
+
         if node not in self.selected_nodes.get(self.index, set()):
             self.selected_nodes.get(self.index, set()).add(node)
-            self.widgets[node].apply_selection(node, True)
+            self.children[node].apply_selection(node, True)
             return True
         else:
             return False
@@ -124,12 +126,15 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
             True if the node was deselected
             False if it wasn't already
         """
+        # TODO: Add type error handling
+        if node >= len(self.children) or node < 0:
+            raise ValueError(f"Invalid node index of {node} with {len(self.children)} selectable nodes")
+
         if node not in self.selected_nodes.get(self.index, {}):
-            self.widgets[node].apply_selection(node, False)
             return False
         else:
             self.selected_nodes[self.index].remove(node)
-            self.widgets[node].apply_selection(node, False)
+            self.children[node].apply_selection(node, False)
             return True
 
     def apply_selection(self, rv, index, is_selected):
@@ -140,7 +145,6 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
 
 class SelectableLabel(Label):
     ''' Add selection support to the Label '''
-    source = StringProperty('C:\\Users\\zsmet\\Pictures\\Saved Pictures\\1458021454503.jpg')
     selected = BooleanProperty(False)
     selectable = BooleanProperty(True)
     index = NumericProperty(0)
@@ -176,7 +180,7 @@ class DuplicateManager(RecycleView):
                 new_data.append(new_group)
 
         # Clear layout managers selection
-        selected = set(self.layout_manager.selected_nodes)
+        selected = self.layout_manager.selected_nodes[:]
         for select in selected:
             self.layout_manager.deselect_node(select)
 

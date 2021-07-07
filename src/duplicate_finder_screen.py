@@ -6,6 +6,8 @@ from kivy.uix.boxlayout import BoxLayout
 from src.duplicate_finder import DuplicateFinder, HashDuplicateFinder
 
 
+# TODO: Refactor so that this doesn't have a start search which is called by screen manager use screen transitions \
+#  and a string property as well remove other bindings and instead set them in the kivy language
 class DuplicateFinderScreen(Screen):
     def __init__(self, duplicate_image_finder: DuplicateFinder, **kwargs):
         super(DuplicateFinderScreen, self).__init__(**kwargs)
