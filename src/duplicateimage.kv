@@ -22,24 +22,31 @@
                 on_release: root.manager.start_search(filechooser.path)
 
 
-<DuplicateFinder>:
-    padding: 10
-    spacing: 10
-    ProgressBar:
-        id: progress_bar
-    Button:
-        id: cancel_button
-        size: (40, 40)
-        size_hint: (None, None)
-        pos_hint: {'center_y': 0.5}
-        text: "x"
-        on_release: root.cancel()
-    Button:
-        id: start_stop_button
-        size: (40, 40)
-        size_hint: (None, None)
-        pos_hint: {'center_y': 0.5}
-        on_release: root.start_stop()
+<DuplicateFinderStoppableLayout>:
+    on_start: start_stop_button.text = '||'
+    on_stop: start_stop_button.text = '>'
+    on_resume: start_stop_button.text = '||'
+
+    BoxLayout:
+        padding: 10
+        spacing: 10
+        ProgressBar:
+            id: progress_bar
+            max: 10
+            value: 0
+        Button:
+            id: cancel_button
+            size: (40, 40)
+            size_hint: (None, None)
+            pos_hint: {'center_y': 0.5}
+            text: "x"
+            on_release: root.controller.cancel()
+        Button:
+            id: start_stop_button
+            size: (40, 40)
+            size_hint: (None, None)
+            pos_hint: {'center_y': 0.5}
+            on_release: root.controller.start_stop()
 
 
 <SelectableLabel>:

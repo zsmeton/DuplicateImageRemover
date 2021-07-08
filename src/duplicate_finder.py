@@ -3,40 +3,112 @@ from multiprocessing import Pool
 import platform
 import functools
 
-from kivy.uix.widget import Widget
-from kivy.properties import ObjectProperty, ListProperty, AliasProperty
+from kivy.properties import ObjectProperty, ListProperty, AliasProperty, StringProperty, NumericProperty
 from kivy.event import EventDispatcher
 from kivy.clock import mainthread
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.relativelayout import RelativeLayout
+from kivy.clock import Clock
 from src import image_hashing
-from src.progress import Progress
 
 # Features
 # TODO: Add widget which shows estimate and done/current
 # TODO: Add back button
-# Refactor
-# TODO: Make duplicate finder follow the MVC design \
-#  Model: Image paths, duplicate images
-#  View: Displays and connects interfaces to progress updates, stop, start, cancel, finish
-#  Controller: Finds duplicate images and updates properties containing its progress
+
+class DuplicateFinderLayout(FloatLayout):
+    controller = ObjectProperty()
+    __events__ = ('on_start', 'on_stop', 'on_cancel', 'on_resume', 'on_finish')
+
+    def on_start(self):
+        pass
+
+    def on_stop(self):
+        pass
+
+    def on_cancel(self):
+        pass
+
+    def on_resume(self):
+        pass
+
+    def on_finish(self):
+        pass
 
 
-class DuplicateFinder(BoxLayout, EventDispatcher):
+class DuplicateFinderStoppableLayout(DuplicateFinderLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._update_progress_bar_ev = None
+
+    def on_start(self):
+        self._start_update_progress_bar()
+
+    def on_resume(self):
+        self._start_update_progress_bar()
+
+    def on_stop(self):
+        self._stop_update_progress_bar()
+
+    def on_cancel(self):
+        self._stop_update_progress_bar()
+
+    def on_finish(self):
+        self._stop_update_progress_bar()
+
+    def _stop_update_progress_bar(self):
+        """
+        Cancels the event scheduled to update the progress bar if it exists
+
+        Returns:
+        """
+        ev = self._update_progress_bar_ev
+
+        if ev is not None:
+            ev.cancel()
+
+    def _start_update_progress_bar(self):
+        """
+        Creates a scheduled event to update the progress bar if one doesn't already exist
+
+        Returns:
+        """
+        ev = self._update_progress_bar_ev
+
+        if ev is None:
+            ev = self._update_progress_bar_ev = Clock.schedule_interval(self._update_progress_bar, .1)
+        ev()
+
+    def _update_progress_bar(self, *args):
+        """
+        Updates the progress bar value to the controllers progress
+        Returns:
+        """
+        if self.controller:
+            self.ids.progress_bar.max = self.controller.progress.total
+            self.ids.progress_bar.value = self.controller.progress.index
+
+
+class DuplicateFinderProgress(EventDispatcher):
+    """
+    Stores the DuplicateFinderControllers current progress on finding duplicates
+    """
+    path = StringProperty("")  # Last path processed
+    index = NumericProperty(0)  # Current index in list of image paths processed
+    total = NumericProperty(0)  # Number of images to check
+
+
+class DuplicateFinderController(RelativeLayout):
     """
     Abstract Base Class for a Duplicate Image Finder
     """
+    layout = ObjectProperty(baseclass=DuplicateFinderLayout)
     duplicate_images = ListProperty([])
-    start_icon = '>'
-    stop_icon = '||'
+    progress = ObjectProperty(DuplicateFinderProgress())
+
+    __events__ = ('on_start', 'on_stop', 'on_cancel', 'on_resume', 'on_finish')
 
     def __init__(self, **kwargs):
-        self.register_event_type('on_start')
-        self.register_event_type('on_stop')
-        self.register_event_type('on_cancel')
-        self.register_event_type('on_finish')
-        self.register_event_type('on_resume')
-        super(DuplicateFinder, self).__init__(**kwargs)
+        super(DuplicateFinderController, self).__init__(**kwargs)
 
         # Member variables
         self.thread = None
@@ -71,14 +143,19 @@ class DuplicateFinder(BoxLayout, EventDispatcher):
             raise RuntimeError(f"Cannot transition from {self.state} to running using find")
 
         # Set max progress and pause play button
-        self.ids.progress_bar.max = len(image_paths)
-        self.ids.progress_bar.value = 0
-        self.ids.start_stop_button.text = self.stop_icon
+        new_progress = DuplicateFinderProgress(index=0, total=len(image_paths))
+        self.progress = new_progress
 
         # Start the duplicate finding thread
         self.duplicate_images = []
+
+        # Shortcut if image_paths is empty
+        if not image_paths:
+            self.state = 'running'
+            self.state = 'finished'
+            return
+
         self.thread = threading.Thread(target=self.__find_duplicates__, args=(image_paths,))
-        self.thread.daemon = True
         self.thread.start()
 
         # change state
@@ -95,10 +172,8 @@ class DuplicateFinder(BoxLayout, EventDispatcher):
     def start_stop(self):
         if self.state == 'running':
             self.stop()
-            self.ids.start_stop_button.text = self.start_icon
         elif self.state == 'stopped':
             self.resume()
-            self.ids.start_stop_button.text = self.stop_icon
 
     @mainthread
     def stop(self):
@@ -140,6 +215,9 @@ class DuplicateFinder(BoxLayout, EventDispatcher):
         self._state = next_state
         #   Dispatching the transition event
         self.dispatch(self._state_transitions[old_next_state][next_state])
+        #   Dispatch the event for the layout
+        if self.layout:
+            self.layout.dispatch(self._state_transitions[old_next_state][next_state])
 
     # Create state member
     state = AliasProperty(get_state, set_state, bind=[])
@@ -174,7 +252,7 @@ class DuplicateFinder(BoxLayout, EventDispatcher):
             self.thread.join()
 
 
-class HashDuplicateFinder(DuplicateFinder):
+class HashDuplicateFinderController(DuplicateFinderController):
     def __init__(self, num_threads=4, **kwargs):
         super().__init__(**kwargs)
         self.hashes = dict()
@@ -219,7 +297,8 @@ class HashDuplicateFinder(DuplicateFinder):
                     self.hashes[hash_val] = p
 
                 # update progress
-                self.ids.progress_bar.value = self.ids.progress_bar.value + 1
+                new_progress = DuplicateFinderProgress(index=self.progress.index + 1, total=len(image_paths))
+                self.progress = new_progress
         else:
             pool.join()
             # Completed duplicate image search
