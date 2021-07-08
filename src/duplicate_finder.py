@@ -143,8 +143,7 @@ class DuplicateFinderController(RelativeLayout):
             raise RuntimeError(f"Cannot transition from {self.state} to running using find")
 
         # Set max progress and pause play button
-        new_progress = DuplicateFinderProgress(index=0, total=len(image_paths))
-        self.progress = new_progress
+        self.progress = DuplicateFinderProgress(index=0, total=len(image_paths))
 
         # Start the duplicate finding thread
         self.duplicate_images = []
@@ -267,7 +266,7 @@ class HashDuplicateFinderController(DuplicateFinderController):
         Returns:
             list[list[str]]: list of duplicates
         """
-        # TODO: Add error handling to improper images or improper paths
+        # TODO: Add error handling for improper images or improper paths
 
         # clear old data
         self.hashes = dict()
@@ -296,9 +295,12 @@ class HashDuplicateFinderController(DuplicateFinderController):
                     p.append(image_path)
                     self.hashes[hash_val] = p
 
-                # update progress
-                new_progress = DuplicateFinderProgress(index=self.progress.index + 1, total=len(image_paths))
-                self.progress = new_progress
+                    # update progress path
+                    self.progress.path = image_path
+
+                # update progress index
+                self.progress.index += 1
+
         else:
             pool.join()
             # Completed duplicate image search
