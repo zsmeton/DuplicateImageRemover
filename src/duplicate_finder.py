@@ -15,23 +15,34 @@ from src import image_hashing
 # TODO: Add widget which shows estimate and done/current
 # TODO: Add back button
 
+
 class DuplicateFinderLayout(FloatLayout):
     controller = ObjectProperty()
     __events__ = ('on_start', 'on_stop', 'on_cancel', 'on_resume', 'on_finish')
 
     def on_start(self):
+        """ Start event handler
+        """
         pass
 
     def on_stop(self):
+        """ Stop event handler
+        """
         pass
 
     def on_cancel(self):
+        """ Cancel event handler
+        """
         pass
 
     def on_resume(self):
+        """ Resume event handler
+        """
         pass
 
     def on_finish(self):
+        """ Finish event handler
+        """
         pass
 
 
@@ -39,27 +50,35 @@ class DuplicateFinderStoppableLayout(DuplicateFinderLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._update_progress_bar_ev = None
+        self._update_dt = .05
 
     def on_start(self):
+        """ Start event handler
+        """
         self._start_update_progress_bar()
 
     def on_resume(self):
+        """ Resume event handler
+        """
         self._start_update_progress_bar()
 
     def on_stop(self):
+        """ Stop event handler
+        """
         self._stop_update_progress_bar()
 
     def on_cancel(self):
+        """ Cancel event handler
+        """
         self._stop_update_progress_bar()
 
     def on_finish(self):
+        """ Finish event handler
+        """
         self._stop_update_progress_bar()
 
     def _stop_update_progress_bar(self):
-        """
-        Cancels the event scheduled to update the progress bar if it exists
-
-        Returns:
+        """ Cancels the event scheduled to update the progress bar if it exists
         """
         ev = self._update_progress_bar_ev
 
@@ -67,20 +86,17 @@ class DuplicateFinderStoppableLayout(DuplicateFinderLayout):
             ev.cancel()
 
     def _start_update_progress_bar(self):
-        """
-        Creates a scheduled event to update the progress bar if one doesn't already exist
-
-        Returns:
+        """ Creates a scheduled event to update the progress bar if one doesn't already exist
         """
         ev = self._update_progress_bar_ev
 
         if ev is None:
-            ev = self._update_progress_bar_ev = Clock.schedule_interval(self._update_progress_bar, .1)
+            ev = self._update_progress_bar_ev = Clock.schedule_interval(self._update_progress_bar, self._update_dt)
         ev()
 
     def _update_progress_bar(self, *args):
-        """
-        Updates the progress bar value to the controllers progress
+        """ Updates the progress bar value to the controllers progress
+
         Returns:
         """
         if self.controller:
@@ -99,7 +115,7 @@ class DuplicateFinderProgress(EventDispatcher):
 
 class DuplicateFinderController(RelativeLayout):
     """
-    Abstract Base Class for a Duplicate Image Finder
+    Abstract Base Class for a Duplicate Image Finder Controller
     """
     layout = ObjectProperty(baseclass=DuplicateFinderLayout)
     duplicate_images = ListProperty([])
@@ -161,14 +177,27 @@ class DuplicateFinderController(RelativeLayout):
         self.state = 'running'
 
     def __find_duplicates__(self, image_paths, **kwargs):
-        """Finds all of the duplicate items in the image list and stores them in duplicate
-        Called internally as a seperate thread, should set state to finished and dispatch on_finished event
-        when complete
+        """
+        Finds all of the duplicate items in the image list and stores them in ``self.duplicate_images``
+        in the form of List[List[str]].
+
+        Called internally as a separate thread, should react to and set ``self.state``:
+            ``stopped`` -> pause current action and resume when state changes to ``running``
+
+            ``canceled`` -> stop current action and return
+
+            ``finished`` -> set this as the state before returning from the function
+
+        Args:
+            image_paths: list of image paths to check for duplicates
+            **kwargs:
         """
         raise NotImplementedError
 
     @mainthread
     def start_stop(self):
+        """ Toggles the state between start and stop
+        """
         if self.state == 'running':
             self.stop()
         elif self.state == 'stopped':
@@ -183,15 +212,14 @@ class DuplicateFinderController(RelativeLayout):
 
     @mainthread
     def cancel(self):
-        """
-        Cancels the current thread finding the duplicate images should kill the corresponding thread as well
+        """ Cancels the current thread finding the duplicate images should kill the corresponding thread as well
         """
         # change state
         self.state = 'canceled'
 
     @mainthread
     def resume(self):
-        """Resumes the current thread which was finding duplicate images
+        """ Resumes the current thread which was finding duplicate images
         """
         # change state
         self.state = 'running'
@@ -224,23 +252,27 @@ class DuplicateFinderController(RelativeLayout):
     # Events #
     @mainthread
     def on_start(self, *args):
-        """ Default start handler """
+        """ Default start handler
+        """
         pass
 
     @mainthread
     def on_stop(self, *args):
-        """ Default stop handler """
+        """ Default stop handler
+        """
         pass
 
     @mainthread
     def on_cancel(self, *args):
-        """ Default cancel handler """
+        """ Default cancel handler
+        """
         if self.thread and platform.system() == 'Windows':
             self.thread.join()
 
     @mainthread
     def on_resume(self, *args):
-        """ Default resume handler """
+        """ Default resume handler
+        """
         pass
 
     @mainthread
@@ -258,14 +290,6 @@ class HashDuplicateFinderController(DuplicateFinderController):
         self.num_threads = num_threads
 
     def __find_duplicates__(self, image_paths, **kwargs):
-        """Returns a list where each entry is a list of duplicate image paths
-
-        Raises:
-            ThreadInProgressError: Cannot get duplicates while running
-
-        Returns:
-            list[list[str]]: list of duplicates
-        """
         # TODO: Add error handling for improper images or improper paths
 
         # clear old data
