@@ -10,6 +10,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.clock import Clock
 from src import image_hashing
+from src.stoppable_pool import StoppablePool
 
 # Features
 # TODO: Add widget which shows estimate and done/current
@@ -330,17 +331,16 @@ class HashDuplicateFinderController(DuplicateFinderController):
         self.progress.total = len(image_paths)
 
         # Compute hashes
-        pool = Pool(processes=self.num_threads)
         partial_hash = functools.partial(image_hashing.async_open_and_hash, hash_size=16)
-        results = pool.imap_unordered(partial_hash, image_paths)
-        pool.close()
+        pool = StoppablePool(data=image_paths, fn= partial_hash, num_workers=self.num_threads)
 
-        for result in results:
+        for result in pool:
+            while self.state == 'stopped':
+                # Don't do anything else in the loop while stopped
+                continue
             if self.state == 'canceled':
                 # stop the pool and exit the loop
                 pool.terminate()
-                if platform.system() == 'Windows':
-                    pool.join()
                 break
             else:
                 if result is not None:
@@ -358,7 +358,6 @@ class HashDuplicateFinderController(DuplicateFinderController):
                 self.progress.index += 1
 
         else:
-            pool.join()
             # Completed duplicate image search
             # set duplicates
             self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]

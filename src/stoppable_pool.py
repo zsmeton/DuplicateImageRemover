@@ -101,3 +101,7 @@ if __name__ == "__main__":
             print("terminating")
             pool.terminate()
 
+    pool2 = StoppablePool(nums, math.sin)
+    for res in StoppablePool(nums, math.sin):
+        pass
+    pool2.terminate()
