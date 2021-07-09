@@ -2,6 +2,7 @@ import threading
 from multiprocessing import Pool, Value
 import platform
 import functools
+import time
 
 from kivy.properties import ObjectProperty, ListProperty, AliasProperty, StringProperty, NumericProperty
 from kivy.event import EventDispatcher
@@ -300,7 +301,7 @@ class DuplicateFinderController(RelativeLayout):
     def on_cancel(self, *args):
         """ Default cancel handler
         """
-        if self.thread and platform.system() == 'Windows':
+        if self.thread:
             self.thread.join()
 
     @mainthread
@@ -313,15 +314,25 @@ class DuplicateFinderController(RelativeLayout):
     def on_finish(self, *args):
         """ Default finish handler
         """
-        if self.thread and platform.system() == 'Windows':
+        if self.thread:
             self.thread.join()
 
 
+# TODO: Fix this stuff so the pool gets terminated on application close
 class HashDuplicateFinderController(DuplicateFinderController):
     def __init__(self, num_threads=4, **kwargs):
         super().__init__(**kwargs)
         self.hashes = dict()
         self.num_threads = num_threads
+        self.start = None
+    
+    def on_start(self):
+        super().on_start()
+        self.start = time.time()
+    
+    def on_finish(self):
+        super().on_finish()
+        print(time.time()-self.start)
 
     def __find_duplicates__(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths

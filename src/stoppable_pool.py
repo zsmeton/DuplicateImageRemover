@@ -3,7 +3,6 @@ from functools import partial
 import queue
 import time
 
-
 class StoppableConsumer(mp.Process):
     def __init__(self, input_queue, result_queue, finish_flag, **kwargs):
         super().__init__(**kwargs)
@@ -14,7 +13,7 @@ class StoppableConsumer(mp.Process):
     def run(self) -> None:
         while True:
             try:
-                task = self.input_queue.get_nowait()
+                task = self.input_queue.get(timeout=0.1)
                 self.result_queue.put(task())
             except queue.Empty:
                 # If we still aren't signalled to be done, try again
