@@ -1,5 +1,5 @@
 import threading
-from multiprocessing import Pool
+from multiprocessing import Pool, Value
 import platform
 import functools
 
@@ -14,6 +14,37 @@ from src import image_hashing
 # Features
 # TODO: Add widget which shows estimate and done/current
 # TODO: Add back button
+
+
+class DuplicateFinderProgress(EventDispatcher):
+    """
+    Stores the DuplicateFinder progress
+    """
+    path = StringProperty("")  # Last path processed
+    index = NumericProperty(0)  # Current index in list of image paths processed
+    total = NumericProperty(10)  # Number of images to check
+
+
+class DuplicateFinderProgressBase(RelativeLayout, DuplicateFinderProgress):
+    """
+    Base class for various DuplicateFinder progress bars
+    """
+    pass
+
+
+class DuplicateFinderProgressBar(DuplicateFinderProgressBase):
+    """
+    Standard progress bar for DuplicateFinder views
+    """
+    pass
+
+
+class EstimatingProgressBar(DuplicateFinderProgressBar):
+    """
+    Progress Bar which adds an estimate text for time to finish
+    """
+    estimate_text_prefix = StringProperty("eta: ")
+    estimate_text = StringProperty("")
 
 
 class DuplicateFinderLayout(FloatLayout):
@@ -46,7 +77,7 @@ class DuplicateFinderLayout(FloatLayout):
         pass
 
 
-class DuplicateFinderStoppableLayout(DuplicateFinderLayout):
+class DuplicateFinderProgressLayout(DuplicateFinderLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._update_progress_bar_ev = None
@@ -55,26 +86,36 @@ class DuplicateFinderStoppableLayout(DuplicateFinderLayout):
     def on_start(self):
         """ Start event handler
         """
+        if super().on_start():
+            return True
         self._start_update_progress_bar()
 
     def on_resume(self):
         """ Resume event handler
         """
+        if super().on_resume():
+            return True
         self._start_update_progress_bar()
 
     def on_stop(self):
         """ Stop event handler
         """
+        if super().on_stop():
+            return True
         self._stop_update_progress_bar()
 
     def on_cancel(self):
         """ Cancel event handler
         """
+        if super().on_cancel():
+            return True
         self._stop_update_progress_bar()
 
     def on_finish(self):
         """ Finish event handler
         """
+        if super().on_finish():
+            return True
         self._stop_update_progress_bar()
 
     def _stop_update_progress_bar(self):
@@ -100,17 +141,9 @@ class DuplicateFinderStoppableLayout(DuplicateFinderLayout):
         Returns:
         """
         if self.controller:
-            self.ids.progress_bar.max = self.controller.progress.total
-            self.ids.progress_bar.value = self.controller.progress.index
-
-
-class DuplicateFinderProgress(EventDispatcher):
-    """
-    Stores the DuplicateFinderControllers current progress on finding duplicates
-    """
-    path = StringProperty("")  # Last path processed
-    index = NumericProperty(0)  # Current index in list of image paths processed
-    total = NumericProperty(0)  # Number of images to check
+            self.ids.progress_bar.path = self.controller.progress.path
+            self.ids.progress_bar.index = self.controller.progress.index
+            self.ids.progress_bar.total = self.controller.progress.total
 
 
 class DuplicateFinderController(RelativeLayout):
@@ -158,7 +191,7 @@ class DuplicateFinderController(RelativeLayout):
         if self.state == "running" or self.state == "stopped":
             raise RuntimeError(f"Cannot transition from {self.state} to running using find")
 
-        # Set max progress and pause play button
+        # Set max progress
         self.progress = DuplicateFinderProgress(index=0, total=len(image_paths))
 
         # Start the duplicate finding thread
@@ -294,6 +327,7 @@ class HashDuplicateFinderController(DuplicateFinderController):
 
         # clear old data
         self.hashes = dict()
+        self.progress.total = len(image_paths)
 
         # Compute hashes
         pool = Pool(processes=self.num_threads)
@@ -302,8 +336,6 @@ class HashDuplicateFinderController(DuplicateFinderController):
         pool.close()
 
         for result in results:
-            while self.state == 'stopped':
-                continue
             if self.state == 'canceled':
                 # stop the pool and exit the loop
                 pool.terminate()

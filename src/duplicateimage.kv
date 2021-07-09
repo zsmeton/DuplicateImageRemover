@@ -21,8 +21,13 @@
                 text: "Load"
                 on_release: root.manager.start_search(filechooser.path)
 
+<DuplicateFinderProgressBar>:
+    ProgressBar:
+        id: _df_progress_bar
+        max: root.total
+        value: root.index
 
-<DuplicateFinderStoppableLayout>:
+<DuplicateFinderProgressLayout>:
     on_start: start_stop_button.text = '||'
     on_stop: start_stop_button.text = '>'
     on_resume: start_stop_button.text = '||'
@@ -30,10 +35,8 @@
     BoxLayout:
         padding: 10
         spacing: 10
-        ProgressBar:
+        DuplicateFinderProgressBar:
             id: progress_bar
-            max: 10
-            value: 0
         Button:
             id: cancel_button
             size: (40, 40)

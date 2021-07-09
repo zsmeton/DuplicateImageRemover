@@ -2,7 +2,6 @@ import os
 import argparse
 import math
 import time
-from multiprocessing import Pool
 import imutils
 from imutils import paths
 import cv2
@@ -20,6 +19,7 @@ def dhash(image, hash_size=8):
     diff = resized[:, 1:] > resized[:, :-1]
     # convert the difference image to a hash and return it
     return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
+
 
 def async_open_and_hash(image_path, hash_size=8):
     # load the input image and compute the hash
