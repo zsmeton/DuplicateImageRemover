@@ -205,13 +205,13 @@ class DuplicateFinderController(RelativeLayout):
             self.state = 'finished'
             return
 
-        self.thread = threading.Thread(target=self.__find_duplicates__, args=(image_paths,))
+        self.thread = threading.Thread(target=self._find_duplicates, args=(image_paths,))
         self.thread.start()
 
         # change state
         self.state = 'running'
 
-    def __find_duplicates__(self, image_paths, **kwargs):
+    def _find_duplicates(self, image_paths, **kwargs):
         """
         Finds all of the duplicate items in the image list and stores them in ``self.duplicate_images``
         in the form of List[List[str]].
@@ -334,7 +334,7 @@ class HashDuplicateFinderController(DuplicateFinderController):
         super().on_finish()
         print(time.time()-self.start)
 
-    def __find_duplicates__(self, image_paths, **kwargs):
+    def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
 
         # clear old data
