@@ -2,6 +2,9 @@ import multiprocessing as mp
 from functools import partial
 import queue
 import time
+# TODO: Figure out how to handle errors thrown in consumers, either raising them in the calling thread,
+#  or dismissing them
+
 
 class StoppableConsumer(mp.Process):
     def __init__(self, input_queue, result_queue, finish_flag, **kwargs):

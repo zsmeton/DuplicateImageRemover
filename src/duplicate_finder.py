@@ -15,8 +15,10 @@ from src import image_hashing
 from src.stoppable_pool import StoppablePool
 
 # Features
-# TODO: Improve estimate
+# TODO: Improve estimate time algorithm
 # TODO: Add back button
+# TODO: Fix this stuff so the pool gets terminated on application close
+# TODO: Fix pooling so errors thrown in pool get handled (pop up for user or dismissed)
 
 
 class DuplicateFinderProgress(EventDispatcher):
@@ -403,7 +405,6 @@ class DuplicateFinderController(RelativeLayout):
             self.thread.join()
 
 
-# TODO: Fix this stuff so the pool gets terminated on application close
 class HashDuplicateFinderController(DuplicateFinderController):
     def __init__(self, num_threads=4, **kwargs):
         super().__init__(**kwargs)
