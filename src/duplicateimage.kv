@@ -23,11 +23,34 @@
 
 <DuplicateFinderProgressBar>:
     ProgressBar:
-        id: _df_progress_bar
+        id: _progress_bar
         max: root.total
         value: root.index
 
-<DuplicateFinderProgressLayout>:
+
+<DuplicateFinderEstimatingProgressBar>:
+    Label:
+        text: root.estimate_text_prefix + root.estimate_text
+        pos_hint: {'right': 1, 'center_y': 0.55}
+        size_hint: (None, None)
+        size: self.texture_size
+    Label:
+        text: root.path
+        text_size: (.5 * root.width, None)
+        shorten: True
+        split_str: '\\'
+        pos_hint: {'left': 0, 'center_y': 0.55}
+        size_hint: (None, None)
+        size: self.texture_size
+    ProgressBar:
+        id: _progress_bar
+        max: root.total
+        value: root.index
+
+
+<DuplicateFinderProgressLayoutBase>:
+    progress_bar: placeholder
+
     on_start: start_stop_button.text = '||'
     on_stop: start_stop_button.text = '>'
     on_resume: start_stop_button.text = '||'
@@ -35,8 +58,8 @@
     BoxLayout:
         padding: 10
         spacing: 10
-        DuplicateFinderProgressBar:
-            id: progress_bar
+        Placeholder:
+            id: placeholder
         Button:
             id: cancel_button
             size: (40, 40)

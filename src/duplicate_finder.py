@@ -10,11 +10,12 @@ from kivy.clock import mainthread
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.clock import Clock
+from kivy.factory import Factory
 from src import image_hashing
 from src.stoppable_pool import StoppablePool
 
 # Features
-# TODO: Add widget which shows estimate and done/current
+# TODO: Improve estimate
 # TODO: Add back button
 
 
@@ -41,12 +42,12 @@ class DuplicateFinderProgressBar(DuplicateFinderProgressBase):
     pass
 
 
-class EstimatingProgressBar(DuplicateFinderProgressBar):
-    """
-    Progress Bar which adds an estimate text for time to finish
+class DuplicateFinderEstimatingProgressBar(DuplicateFinderProgressBase):
+    """ Progress bar with estimate text
     """
     estimate_text_prefix = StringProperty("eta: ")
     estimate_text = StringProperty("")
+    pass
 
 
 class DuplicateFinderLayout(FloatLayout):
@@ -79,9 +80,16 @@ class DuplicateFinderLayout(FloatLayout):
         pass
 
 
-class DuplicateFinderProgressLayout(DuplicateFinderLayout):
+class DuplicateFinderProgressLayoutBase(DuplicateFinderLayout):
+    progress_bar = ObjectProperty()
+
     def __init__(self, **kwargs):
+        # unregister if already registered...
+        Factory.unregister('Placeholder')
+        Factory.register('Placeholder', cls=self.placeholder)
+
         super().__init__(**kwargs)
+
         self._update_progress_bar_ev = None
         self._update_dt = .05
 
@@ -143,9 +151,86 @@ class DuplicateFinderProgressLayout(DuplicateFinderLayout):
         Returns:
         """
         if self.controller:
-            self.ids.progress_bar.path = self.controller.progress.path
-            self.ids.progress_bar.index = self.controller.progress.index
-            self.ids.progress_bar.total = self.controller.progress.total
+            self.progress_bar.path = self.controller.progress.path
+            self.progress_bar.index = self.controller.progress.index
+            self.progress_bar.total = self.controller.progress.total
+
+
+class DuplicateFinderProgressLayout(DuplicateFinderProgressLayoutBase):
+    placeholder = DuplicateFinderProgressBar
+
+
+class DuplicateFinderEstimatingLayout(DuplicateFinderProgressLayout):
+    placeholder = DuplicateFinderEstimatingProgressBar
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.elapsed_time = 0
+        self.last_time = None
+
+    def on_start(self):
+        if super().on_start():
+            return True
+        self.last_time = time.time()
+
+    def on_stop(self):
+        if super().on_stop():
+            return True
+        self.last_time = None
+
+    def on_resume(self):
+        if super().on_resume():
+            return True
+        self.last_time = time.time()
+
+    def _calculate_remaining_time(self):
+        # Check if we can/ should update
+        if self.last_time is None or self.controller is None:
+            return None
+
+        # Nice variable names
+        total_ops = self.controller.progress.total
+        performed_ops = self.controller.progress.index if self.controller.progress.index > 0 else 1
+        current_time = time.time()
+
+        # Update elapsed time and last time
+        self.elapsed_time += current_time - self.last_time
+        self.last_time = current_time
+
+        # Update time per operation
+        time_per_operation = self.elapsed_time / performed_ops
+
+        # Calculate remaining time
+        remaining_operations = total_ops - performed_ops
+        remaining_time_est = remaining_operations * time_per_operation
+
+        return remaining_time_est
+
+    def _time_to_str(self, time):
+        # Get seconds
+        total_seconds = round(time)
+        display_seconds = total_seconds % 60
+        seconds_str = str(display_seconds) + " seconds" if display_seconds > 0 else ""
+
+        # Get minutes
+        total_minutes = total_seconds // 60
+        display_minutes = total_minutes % 60
+        minutes_str = str(display_minutes) + " minutes " if display_minutes > 0 else ""
+
+        # Get hours
+        display_hours = total_minutes // 60
+        hours_str = str(display_hours) + " hours " if display_hours > 0 else ""
+
+        # Format string
+        time_str = hours_str + minutes_str + seconds_str
+        return time_str
+
+    def _update_progress_bar(self, *args):
+        super()._update_progress_bar(*args)
+
+        remaining_time = self._calculate_remaining_time()
+        if remaining_time:
+            self.progress_bar.estimate_text = self._time_to_str(remaining_time)
 
 
 class DuplicateFinderController(RelativeLayout):
@@ -324,15 +409,12 @@ class HashDuplicateFinderController(DuplicateFinderController):
         super().__init__(**kwargs)
         self.hashes = dict()
         self.num_threads = num_threads
-        self.start = None
     
     def on_start(self):
         super().on_start()
-        self.start = time.time()
     
     def on_finish(self):
         super().on_finish()
-        print(time.time()-self.start)
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
