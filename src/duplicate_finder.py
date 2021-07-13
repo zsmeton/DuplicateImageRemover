@@ -513,12 +513,15 @@ class GradientDuplicateFinderController(DuplicateFinderController):
             for image2_gradient, image2_path in image_gradients[i+1:]:
                 xtable_gradients.append((image1_gradient, image1_path, image2_gradient, image2_path))
 
-        # Create image path to index array
+        # Create a union find data structure
+        # Run over all the image pairings (O(n^2))
+        # Calculate the % similarity in their image gradients
+        # If they have a similarity > some factor
+        #   perform union on the two images
         image_index = {image_path: i for i, (_, image_path) in enumerate(image_gradients)}
         union_find = UF(len(image_gradients))
         pool = StoppablePool(fn=image_gradient.image_similarity, args=xtable_gradients, num_workers=self.num_threads)
 
-        # Iterate over similarities and if two images are within a certain similarity perform union on their sets
         for result in pool:
             while self.state == 'stopped':
                 # Don't do anything else in the loop while stopped
@@ -538,14 +541,14 @@ class GradientDuplicateFinderController(DuplicateFinderController):
                 self.progress.index += 1
 
         # Create list of duplicates from union_find data structure
-        hashes = dict()
+        sets_of_images = dict()
         for path, i in image_index.items():
-            hash_val = union_find.find(i)
-            p = hashes.get(hash_val, [])
+            set_id = union_find.find(i)
+            p = sets_of_images.get(set_id, [])
             p.append(path)
-            hashes[hash_val] = p
+            sets_of_images[set_id] = p
 
-        return [images for images in hashes.values() if len(images) > 1]
+        return [images for images in sets_of_images.values() if len(images) > 1]
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
