@@ -36,7 +36,7 @@ class MyScreenManager(ScreenManager):
         super(MyScreenManager, self).__init__(**kwargs)
         self.add_widget(StartMenuScreen(name='start_menu'))
         self.add_widget(DuplicateManagerScreen(name='manage_duplicates'))
-        self.loading_screen = DuplicateFinderScreen(duplicate_finder_controller=GradientDuplicateFinderController(),
+        self.loading_screen = DuplicateFinderScreen(duplicate_finder_controller=HashDuplicateFinderController(),
                                                     duplicate_finder_layout=DuplicateFinderEstimatingLayout(),
                                                     name='loading_screen')
         self.add_widget(self.loading_screen)

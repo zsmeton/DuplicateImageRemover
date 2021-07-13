@@ -13,7 +13,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.clock import Clock
 from kivy.factory import Factory
-from src import image_hashing, image_gradient
+from src import image_hashing, image_gradient, running_average
 from src.stoppable_pool import StoppablePool
 
 # Features
@@ -173,10 +173,12 @@ class DuplicateFinderEstimatingLayout(DuplicateFinderProgressLayout):
         super().__init__(**kwargs)
         self.elapsed_time = 0
         self.last_time = None
+        self.running_operation_time_average = running_average.RunningAverage(20)
 
     def on_start(self):
         if super().on_start():
             return True
+        self.elapsed_time = 0
         self.last_time = time.time()
 
     def on_stop(self):
@@ -203,8 +205,11 @@ class DuplicateFinderEstimatingLayout(DuplicateFinderProgressLayout):
         self.elapsed_time += current_time - self.last_time
         self.last_time = current_time
 
+
         # Update time per operation
         time_per_operation = self.elapsed_time / performed_ops
+        self.running_operation_time_average.add(time_per_operation)
+        time_per_operation = self.running_operation_time_average.average
 
         # Calculate remaining time
         remaining_operations = total_ops - performed_ops
@@ -520,11 +525,7 @@ class GradientDuplicateFinderController(DuplicateFinderController):
                 if result is not None:
                     percentage, image1_path, image2_path = result
 
-                    if percentage < 0.5:
-                        print("weird")
-
                     if percentage > self.similarity_threshold:
-                        print("match")
                         union_find.union(image_index[image1_path], image_index[image2_path])
 
                 # update progress index
