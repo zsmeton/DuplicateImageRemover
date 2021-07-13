@@ -22,7 +22,12 @@ from src.stoppable_pool import StoppablePool
 # TODO: Fix this stuff so the pool gets terminated on application close
 # TODO: Fix pooling so errors thrown in pool get handled (pop up for user or dismissed)
 # TODO: Add caching of info in duplicate controllers for if we cancel, change a param and re-run
+# TODO: Create testing and performance scripts with labeled exact/similar images to compare algorithm performance
+# TODO: Create a HOG based duplicate finder
 # TODO: Create n-dimensional neighbor/percentage based finder for efficient neighbor checking
+# TODO: Create duplicate finder base class for methods which use feature vectors
+# TODO: Create base function which takes data, a function, and performs StoppablePool
+#  with pause and cancel and returns result
 
 
 class DuplicateFinderProgress(EventDispatcher):
@@ -204,7 +209,6 @@ class DuplicateFinderEstimatingLayout(DuplicateFinderProgressLayout):
         # Update elapsed time and last time
         self.elapsed_time += current_time - self.last_time
         self.last_time = current_time
-
 
         # Update time per operation
         time_per_operation = self.elapsed_time / performed_ops
@@ -429,7 +433,8 @@ class HashDuplicateFinderController(DuplicateFinderController):
 
         # Compute hashes
         partial_hash = functools.partial(image_hashing.async_open_and_hash, hash_size=16)
-        pool = StoppablePool(data=image_paths, fn= partial_hash, num_workers=self.num_threads)
+        pool = StoppablePool(fn=partial_hash, args=[(image_path,) for image_path in image_paths],
+                             num_workers=self.num_threads)
 
         for result in pool:
             while self.state == 'stopped':
@@ -463,7 +468,7 @@ class HashDuplicateFinderController(DuplicateFinderController):
 
 
 class GradientDuplicateFinderController(DuplicateFinderController):
-    def __init__(self, similarity_threshold=.95, num_threads=4, **kwargs):
+    def __init__(self, similarity_threshold=.90, num_threads=4, **kwargs):
         super().__init__(**kwargs)
         self.num_threads = num_threads
         self.similarity_threshold = similarity_threshold
@@ -472,7 +477,8 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         image_gradients = []
 
         partial_gradient = functools.partial(image_gradient.async_open_and_gradient, vector_size=8)
-        pool = StoppablePool(data=image_paths, fn=partial_gradient, num_workers=self.num_threads)
+        pool = StoppablePool(fn=partial_gradient, args=[(image_path,) for image_path in image_paths],
+                             num_workers=self.num_threads)
 
         for result in pool:
             while self.state == 'stopped':
@@ -510,7 +516,7 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         # Create image path to index array
         image_index = {image_path: i for i, (_, image_path) in enumerate(image_gradients)}
         union_find = UF(len(image_gradients))
-        pool = StoppablePool(data=xtable_gradients, fn=image_gradient.image_similarity, num_workers=self.num_threads)
+        pool = StoppablePool(fn=image_gradient.image_similarity, args=xtable_gradients, num_workers=self.num_threads)
 
         # Iterate over similarities and if two images are within a certain similarity perform union on their sets
         for result in pool:

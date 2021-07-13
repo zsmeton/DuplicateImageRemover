@@ -4,6 +4,7 @@ import queue
 import time
 # TODO: Figure out how to handle errors thrown in consumers, either raising them in the calling thread,
 #  or dismissing them
+# TODO: Figure out how to use lambda functions and member functions
 
 
 class StoppableConsumer(mp.Process):
@@ -27,9 +28,20 @@ class StoppableConsumer(mp.Process):
 
 
 class StoppablePool:
-    def __init__(self, data, fn, num_workers=4):
+    """
+    Creates a multiprocessing pool which maps a function across a set of arguments,
+    this pool is controlled as an iterator and only gives data to the pool at each iteration.
+
+    Usage:
+    >>> def add(a,b):
+    ...     return a+b
+    >>> data = [(1,2), (3,4), (4,5), (5,6)]
+    >>> for result in StoppablePool(add, data):
+    ...     print(result)
+    """
+    def __init__(self, fn, args, num_workers=4):
         # Create all the tasks
-        self._tasks = [partial(fn, elem) for elem in data]
+        self._tasks = [partial(fn, *elem) for elem in args]
         self._processes = []
         # Create shared memory
         self._input_queue = mp.Queue()
@@ -39,7 +51,7 @@ class StoppablePool:
         self._num_input_data_given = 0
         self._num_output_data_received = 0
         # Set the number of workers
-        self._num_workers = min(num_workers, len(data))
+        self._num_workers = min(num_workers, len(args))
 
     def __iter__(self):
         if not self._processes:
@@ -91,19 +103,19 @@ class StoppablePool:
 if __name__ == "__main__":
     import math
 
-    nums = [i for i in range(100)]
+    nums = [(i,) for i in range(100)]
 
-    for res in StoppablePool(nums, math.sin):
+    for res in StoppablePool(math.sin, nums):
         print(res)
 
-    pool = StoppablePool(nums, math.sin)
+    pool = StoppablePool(math.sin, nums)
     for i, res in enumerate(pool):
         print(res)
         if i > 10:
             print("terminating")
             pool.terminate()
 
-    pool2 = StoppablePool(nums, math.sin)
-    for res in StoppablePool(nums, math.sin):
+    pool2 = StoppablePool(math.sin, nums)
+    for res in StoppablePool(math.sin, nums):
         pass
     pool2.terminate()

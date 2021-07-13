@@ -55,7 +55,7 @@ class MyScreenManager(ScreenManager):
         self.loading_screen.start_search(image_paths)
 
     def search_finished(self, duplicate_images):
-        print(len(duplicate_images), duplicate_images)
+        print(sum([len(elem) for elem in duplicate_images]), [len(elem) for elem in duplicate_images], duplicate_images)
         # TODO: Add error handling
         self.current = 'manage_duplicates'
 
