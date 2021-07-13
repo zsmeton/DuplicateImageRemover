@@ -22,6 +22,7 @@ from src.stoppable_pool import StoppablePool
 # TODO: Fix this stuff so the pool gets terminated on application close
 # TODO: Fix pooling so errors thrown in pool get handled (pop up for user or dismissed)
 # TODO: Add caching of info in duplicate controllers for if we cancel, change a param and re-run
+# TODO: Create n-dimensional neighbor/percentage based finder for efficient neighbor checking
 
 
 class DuplicateFinderProgress(EventDispatcher):
