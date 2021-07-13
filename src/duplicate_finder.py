@@ -3,6 +3,8 @@ from multiprocessing import Pool, Value
 import platform
 import functools
 import time
+import cv2
+from python_algorithms.basic.union_find import UF
 
 from kivy.properties import ObjectProperty, ListProperty, AliasProperty, StringProperty, NumericProperty
 from kivy.event import EventDispatcher
@@ -11,7 +13,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.clock import Clock
 from kivy.factory import Factory
-from src import image_hashing
+from src import image_hashing, image_gradient
 from src.stoppable_pool import StoppablePool
 
 # Features
@@ -19,6 +21,7 @@ from src.stoppable_pool import StoppablePool
 # TODO: Add back button
 # TODO: Fix this stuff so the pool gets terminated on application close
 # TODO: Fix pooling so errors thrown in pool get handled (pop up for user or dismissed)
+# TODO: Add caching of info in duplicate controllers for if we cancel, change a param and re-run
 
 
 class DuplicateFinderProgress(EventDispatcher):
@@ -410,12 +413,6 @@ class HashDuplicateFinderController(DuplicateFinderController):
         super().__init__(**kwargs)
         self.hashes = dict()
         self.num_threads = num_threads
-    
-    def on_start(self):
-        super().on_start()
-    
-    def on_finish(self):
-        super().on_finish()
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
@@ -457,3 +454,104 @@ class HashDuplicateFinderController(DuplicateFinderController):
             self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]
             # set state to finished and call finished event
             self.state = 'finished'
+
+
+class GradientDuplicateFinderController(DuplicateFinderController):
+    def __init__(self, similarity_threshold=.95, num_threads=4, **kwargs):
+        super().__init__(**kwargs)
+        self.num_threads = num_threads
+        self.similarity_threshold = similarity_threshold
+
+    def _compute_gradients(self, image_paths):
+        image_gradients = []
+
+        partial_gradient = functools.partial(image_gradient.async_open_and_gradient, vector_size=8)
+        pool = StoppablePool(data=image_paths, fn=partial_gradient, num_workers=self.num_threads)
+
+        for result in pool:
+            while self.state == 'stopped':
+                # Don't do anything else in the loop while stopped
+                continue
+            if self.state == 'canceled':
+                # stop the pool and exit the loop
+                pool.terminate()
+                return
+            else:
+                if result is not None:
+                    # add gradient to lsit
+                    _, image_path = result
+
+                    image_gradients.append(result)
+
+                    # update progress path
+                    self.progress.path = "Calculating gradients: " + image_path
+
+                # update progress index
+                self.progress.index += 1
+
+        return image_gradients
+
+    def _calculate_similarity(self, image_gradients):
+        # update progress path
+        self.progress.path = "Calculating similarities..."
+
+        # Create pool of images to compare
+        xtable_gradients = []
+        for i, (image1_gradient, image1_path) in enumerate(image_gradients):
+            for image2_gradient, image2_path in image_gradients[i+1:]:
+                xtable_gradients.append((image1_gradient, image1_path, image2_gradient, image2_path))
+
+        # Create image path to index array
+        image_index = {image_path: i for i, (_, image_path) in enumerate(image_gradients)}
+        union_find = UF(len(image_gradients))
+        pool = StoppablePool(data=xtable_gradients, fn=image_gradient.image_similarity, num_workers=self.num_threads)
+
+        # Iterate over similarities and if two images are within a certain similarity perform union on their sets
+        for result in pool:
+            while self.state == 'stopped':
+                # Don't do anything else in the loop while stopped
+                continue
+            if self.state == 'canceled':
+                # stop the pool and exit the loop
+                pool.terminate()
+                return
+            else:
+                if result is not None:
+                    percentage, image1_path, image2_path = result
+
+                    if percentage < 0.5:
+                        print("weird")
+
+                    if percentage > self.similarity_threshold:
+                        print("match")
+                        union_find.union(image_index[image1_path], image_index[image2_path])
+
+                # update progress index
+                self.progress.index += 1
+
+        # Create list of duplicates from union_find data structure
+        hashes = dict()
+        for path, i in image_index.items():
+            hash_val = union_find.find(i)
+            p = hashes.get(hash_val, [])
+            p.append(path)
+            hashes[hash_val] = p
+
+        return [images for images in hashes.values() if len(images) > 1]
+
+    def _find_duplicates(self, image_paths, **kwargs):
+        # TODO: Add error handling for improper images or improper paths
+
+        # clear old data
+        image_count = len(image_paths)
+        gradient_operation_count = image_count
+        similarity_operation_count = ((image_count-1)**2 + (image_count-1)) / 2
+        self.progress.total = similarity_operation_count + gradient_operation_count
+
+        # Compute gradients for all images
+        image_gradients = self._compute_gradients(image_paths)
+
+        # Find similarities
+        self.duplicate_images = self._calculate_similarity(image_gradients)
+
+        self.state = 'finished'

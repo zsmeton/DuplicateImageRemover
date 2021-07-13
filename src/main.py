@@ -6,7 +6,8 @@ from kivy.uix.widget import Widget
 from kivy.properties import StringProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
 
-from src.duplicate_finder import HashDuplicateFinderController, DuplicateFinderProgressLayout, DuplicateFinderEstimatingLayout
+from src.duplicate_finder import HashDuplicateFinderController, DuplicateFinderProgressLayout, \
+    DuplicateFinderEstimatingLayout, GradientDuplicateFinderController
 from src.duplicate_finder_screen import DuplicateFinderScreen
 from src.duplicate_manager_screen import DuplicateManagerScreen
 
@@ -35,7 +36,7 @@ class MyScreenManager(ScreenManager):
         super(MyScreenManager, self).__init__(**kwargs)
         self.add_widget(StartMenuScreen(name='start_menu'))
         self.add_widget(DuplicateManagerScreen(name='manage_duplicates'))
-        self.loading_screen = DuplicateFinderScreen(duplicate_finder_controller=HashDuplicateFinderController(),
+        self.loading_screen = DuplicateFinderScreen(duplicate_finder_controller=GradientDuplicateFinderController(),
                                                     duplicate_finder_layout=DuplicateFinderEstimatingLayout(),
                                                     name='loading_screen')
         self.add_widget(self.loading_screen)
@@ -54,7 +55,7 @@ class MyScreenManager(ScreenManager):
         self.loading_screen.start_search(image_paths)
 
     def search_finished(self, duplicate_images):
-        print(duplicate_images)
+        print(len(duplicate_images), duplicate_images)
         # TODO: Add error handling
         self.current = 'manage_duplicates'
 
