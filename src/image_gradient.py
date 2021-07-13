@@ -65,7 +65,7 @@ def image_similarity(image1_gradient, image1_path, image2_gradient, image2_path)
 
 
 if __name__ == "__main__":
-    image = cv2.imread("C:\\Users\\zsmet\\PycharmProjects\\DuplicateImageRemover\\tests\\images\\wolf.jpg")
+    image = cv2.imread("../tests/images/wolf.jpg")
     gradient_img = calculate_horizontal_gradient(image, 50)
     cv2.imshow("image", gradient_img)
     cv2.waitKey()
