@@ -304,11 +304,12 @@ class DuplicateFinderController(RelativeLayout):
             self.state = 'finished'
             return
 
-        self.thread = threading.Thread(target=self._find_duplicates, args=(image_paths,))
-        self.thread.start()
-
         # change state
         self.state = 'running'
+
+        # Start thread
+        self.thread = threading.Thread(target=self._find_duplicates, args=(image_paths,))
+        self.thread.start()
 
     def _find_duplicates(self, image_paths, **kwargs):
         """
@@ -327,6 +328,20 @@ class DuplicateFinderController(RelativeLayout):
             **kwargs:
         """
         raise NotImplementedError
+
+    def _should_stop_loop(self):
+        """
+        Performs logic for user stopping, resuming, and canceling
+        should be called for any loops in _find_duplicates
+
+        Returns:
+            true if the loop should stop and return
+            false if the loop should continue
+        """
+        while self.state == 'stopped':
+            # Don't do anything else in the loop while stopped
+            continue
+        return self.state == 'canceled'
 
     @mainthread
     def start_stop(self):
@@ -418,10 +433,11 @@ class DuplicateFinderController(RelativeLayout):
 
 
 class HashDuplicateFinderController(DuplicateFinderController):
-    def __init__(self, num_threads=4, **kwargs):
+    def __init__(self, hash_size=16, num_threads=4, **kwargs):
         super().__init__(**kwargs)
         self.hashes = dict()
         self.num_threads = num_threads
+        self.hash_size = hash_size
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
@@ -432,16 +448,12 @@ class HashDuplicateFinderController(DuplicateFinderController):
         self.progress.total = len(image_paths)
 
         # Compute hashes
-        partial_hash = functools.partial(image_hashing.async_open_and_hash, hash_size=16)
+        partial_hash = functools.partial(image_hashing.async_open_and_hash, hash_size=self.hash_size)
         pool = StoppablePool(fn=partial_hash, args=[(image_path,) for image_path in image_paths],
                              num_workers=self.num_threads)
 
         for result in pool:
-            while self.state == 'stopped':
-                # Don't do anything else in the loop while stopped
-                continue
-            if self.state == 'canceled':
-                # stop the pool and exit the loop
+            if self._should_stop_loop():
                 pool.terminate()
                 break
             else:
@@ -471,12 +483,13 @@ class HashDuplicateFinderController(DuplicateFinderController):
 
 
 class GradientDuplicateFinderController(DuplicateFinderController):
-    def __init__(self, similarity_threshold=.90, num_threads=4, **kwargs):
+    def __init__(self, vector_size=8, similarity_threshold=.90, num_threads=4, **kwargs):
         super().__init__(**kwargs)
         self.num_threads = num_threads
+        self.vector_size = vector_size
         self.similarity_threshold = similarity_threshold
 
-    def _compute_gradients(self, image_paths):
+    def _calculate_gradients(self, image_paths):
         image_gradients = []
 
         partial_gradient = functools.partial(image_gradient.async_open_and_gradient, vector_size=8)
@@ -484,25 +497,20 @@ class GradientDuplicateFinderController(DuplicateFinderController):
                              num_workers=self.num_threads)
 
         for result in pool:
-            while self.state == 'stopped':
-                # Don't do anything else in the loop while stopped
-                continue
-            if self.state == 'canceled':
-                # stop the pool and exit the loop
+            if self._should_stop_loop():
                 pool.terminate()
                 return []
-            else:
-                if result is not None:
-                    # add gradient to lsit
-                    _, image_path = result
+            elif result is not None:
+                # add gradient to list
+                _, image_path = result
 
-                    image_gradients.append(result)
+                image_gradients.append(result)
 
-                    # update progress path
-                    self.progress.path = "Calculating gradients: " + image_path
+                # update progress path
+                self.progress.path = "Calculating gradients: " + image_path
 
-                # update progress index
-                self.progress.index += 1
+            # update progress index
+            self.progress.index += 1
 
         return image_gradients
 
@@ -526,23 +534,22 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         #  is better practice
         for i, (image1_gradient, image1_path) in enumerate(image_gradients):
             for j, (image2_gradient, image2_path) in enumerate(image_gradients[i+1:]):
-                while self.state == 'stopped':
-                    # Don't do anything else in the loop while stopped
-                    continue
-                if self.state == 'canceled':
-                    # exit the loop
+                if self._should_stop_loop():
                     return []
-                else:
-                    percentage = image_gradient.gradient_similarity(image1_gradient, image2_gradient)
-                    if percentage > self.similarity_threshold:
-                        union_find.union(i, i+1+j)
 
-                    # update progress index
-                    self.progress.index += 1
+                percentage = image_gradient.gradient_similarity(image1_gradient, image2_gradient)
+                if percentage > self.similarity_threshold:
+                    union_find.union(i, i+1+j)
+
+                # update progress index
+                self.progress.index += 1
 
         # Create list of duplicates from union_find data structure
         sets_of_images = dict()
         for i, (_, path) in enumerate(image_gradients):
+            if self._should_stop_loop():
+                return []
+
             set_id = union_find.find(i)
             p = sets_of_images.get(set_id, [])
             p.append(path)
@@ -552,8 +559,6 @@ class GradientDuplicateFinderController(DuplicateFinderController):
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
-        # TODO: Compare timing of compute gradients using liner vs multiprocessing
-        # TODO: Compare timing of calculate similarity using one thread vs multiprocessing
 
         # clear old data
         image_count = len(image_paths)
@@ -562,19 +567,16 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         self.progress.total = similarity_operation_count + gradient_operation_count
 
         # Compute gradients for all images
-        image_gradients = self._compute_gradients(image_paths)
+        image_gradients = self._calculate_gradients(image_paths)
 
-        # stop if the user cancels
-        if self.state == 'canceled':
+        # Check state logic
+        if self._should_stop_loop():
             return
 
         # Find similarities
         self.duplicate_images = self._get_duplicates_from_gradients(image_gradients)
 
-        # stop if the user cancels
-        if self.state == 'canceled':
+        # Check state logic
+        if self._should_stop_loop():
             return
-        # wait to set finished if user paused the operation
-        while self.state == 'stopped':
-            continue
         self.state = 'finished'
