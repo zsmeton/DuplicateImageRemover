@@ -6,9 +6,18 @@ paper1.jpg
 paper1_2.jpg
 seeds1.jpg
 seeds1_2.jpg
+socks1.jpg
+socks1_2.jpg
+candle1.jpg
+candle1_2.jpg
+whiteboard1.jpg
+whiteboard1_2.jpg
 
 duplicates:
 
 similar:
 paper1.jpg paper1_2.jpg
 seeds1.jpg seeds1_2.jpg
+socks1.jpg socks1_2.jpg
+candle1.jpg candle1_2.jpg
+whiteboard1.jpg whiteboard1_2.jpg

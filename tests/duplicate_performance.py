@@ -16,10 +16,10 @@ class ModelType(Enum):
 
 
 class DuplicateFinderModel:
-    name = "Base Model"
     type = ModelType.PERFECT
 
-    def __init__(self, **kwargs):
+    def __init__(self, name="Base Model", **kwargs):
+        self.name = name
         pass
 
     def score_perfect(self, images, actual_sims):
@@ -96,11 +96,10 @@ class DuplicateFinderModel:
 
 
 class HashDuplicateFinderModel(DuplicateFinderModel):
-    name = "DHash"
     type = ModelType.PERFECT
 
-    def __init__(self, hash_size=8, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, hash_size=8, name="DHash", **kwargs):
+        super().__init__(name=name, **kwargs)
         self.hash_size = hash_size
         self.hashes = None
 
@@ -135,11 +134,10 @@ class HashDuplicateFinderModel(DuplicateFinderModel):
 
 
 class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel):
-    name = "Tolerance Similar Base"
     type = ModelType.NEAR
 
-    def __init__(self, tolerances=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, tolerances=None, name="Tolerance Base", **kwargs):
+        super().__init__(name=name, **kwargs)
         if tolerances is None:
             tolerances = [0.05, .1, .2, .3, .4, .5, .6, .7, .8, .9, .95, .98, 1]
         self.tolerances = tolerances
@@ -161,8 +159,8 @@ class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel):
 class GradientDuplicateFinderModel(ToleranceSimilarDuplicateFinderModel):
     name = "Gradient"
 
-    def __init__(self, vector_size=8, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self,  vector_size=8, name="Gradient", **kwargs):
+        super().__init__(name=name, **kwargs)
         self.vector_size = vector_size
         self.gradients = []
 
@@ -354,8 +352,10 @@ if __name__ == "__main__":
     # Create models
     hash_model = HashDuplicateFinderModel()
     manager.add_model(hash_model)
-    grad_model = GradientDuplicateFinderModel(tolerances=[.6,.7,.75,.8,.85,.9,.95,.98, 1.0])
-    manager.add_model(grad_model)
+    grad_8_model = GradientDuplicateFinderModel(name="Gradient-8", tolerances=[.6,.7,.75,.8,.85,.9,.95,.98, 1.0])
+    manager.add_model(grad_8_model)
+    grad_32_model = GradientDuplicateFinderModel(name="Gradient-32", tolerances=[.6, .7, .75, .8, .85, .9, .95, .98, 1.0])
+    manager.add_model(grad_32_model)
 
     # Create tests
     p1 = PerformanceTest(os.path.join("performance_tests", "basic"))
