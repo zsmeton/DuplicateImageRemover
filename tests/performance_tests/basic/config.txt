@@ -1,0 +1,23 @@
+name:
+basic_test
+images:
+1_1.jpg
+1_2.jpg
+sebs.png
+wolf.jpg
+jeep.jpg
+paper1.jpg
+paper1_2.jpg
+paper2.jpg
+mac.jpg
+legs.jpg
+sadie.jpg
+wood.jpg
+gaming.jpg
+notes1_1.jpg
+notes1_2.jpg
+duplicates:
+1_1.jpg 1_2.jpg
+notes1_1.jpg notes1_2.jpg
+similar:
+paper1.jpg paper1_2.jpg

@@ -22,7 +22,6 @@ from src.stoppable_pool import StoppablePool
 # TODO: Fix this stuff so the pool gets terminated on application close
 # TODO: Fix pooling so errors thrown in pool get handled (pop up for user or dismissed)
 # TODO: Add caching of info in duplicate controllers for if we cancel, change a param and re-run
-# TODO: Create testing and performance scripts with labeled exact/similar images to compare algorithm performance
 # TODO: Create a HOG based duplicate finder
 # TODO: Create n-dimensional neighbor/percentage based finder for efficient neighbor checking
 # TODO: Create duplicate finder base class for methods which use feature vectors
@@ -520,7 +519,7 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         #   perform union on the two images
         image_index = {image_path: i for i, (_, image_path) in enumerate(image_gradients)}
         union_find = UF(len(image_gradients))
-        pool = StoppablePool(fn=image_gradient.image_similarity, args=xtable_gradients, num_workers=self.num_threads)
+        pool = StoppablePool(fn=image_gradient.async_image_gradient_similarity, args=xtable_gradients, num_workers=self.num_threads)
 
         for result in pool:
             while self.state == 'stopped':

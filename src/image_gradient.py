@@ -56,11 +56,16 @@ def async_open_and_gradient(image_path, **kwargs):
     return gradient_vector, image_path
 
 
-def image_similarity(image1_gradient, image1_path, image2_gradient, image2_path):
+def gradient_similarity(image1_gradient, image2_gradient):
     # compute dot product
-    dot_product = max(min(np.dot(image1_gradient, image2_gradient), 1), -1)
-    angle = np.arccos(dot_product)  # angle of 0 means exactly the same, 2pi = perfectly opposite
-    percentage = 1 - (angle/(2*np.pi))
+    dot_product = min(np.dot(image1_gradient, image2_gradient), 1.0)
+    if dot_product < 0:
+        raise RuntimeError("Dot product between gradients was < 0")
+    return dot_product
+
+
+def async_image_gradient_similarity(image1_gradient, image1_path, image2_gradient, image2_path):
+    percentage = gradient_similarity(image1_gradient, image2_gradient)
     return percentage, image1_path, image2_path
 
 

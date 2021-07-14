@@ -1,0 +1,14 @@
+name:
+highly_similar_test
+
+images:
+paper1.jpg
+paper1_2.jpg
+seeds1.jpg
+seeds1_2.jpg
+
+duplicates:
+
+similar:
+paper1.jpg paper1_2.jpg
+seeds1.jpg seeds1_2.jpg
