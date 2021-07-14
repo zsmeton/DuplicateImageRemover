@@ -5,6 +5,7 @@ import time
 # TODO: Figure out how to handle errors thrown in consumers, either raising them in the calling thread,
 #  or dismissing them
 # TODO: Figure out how to use lambda functions and member functions
+# TODO: Add to unit tests
 
 
 class StoppableConsumer(mp.Process):

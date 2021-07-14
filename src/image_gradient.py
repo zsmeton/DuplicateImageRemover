@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+# TODO: Add to unit tests
 
 def normalize(v):
     """
