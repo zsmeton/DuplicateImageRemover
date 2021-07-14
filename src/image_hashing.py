@@ -1,13 +1,7 @@
-import os
-import argparse
-import math
-import time
-import imutils
-from imutils import paths
 import cv2
-from tqdm import tqdm
 
 # TODO: Add to unit tests
+
 
 def dhash(image, hash_size=8):
     # convert the image to grayscale and resize the grayscale image,
