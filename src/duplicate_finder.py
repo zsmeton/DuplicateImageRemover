@@ -425,6 +425,7 @@ class HashDuplicateFinderController(DuplicateFinderController):
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
+        # TODO: Compare timing of compute gradients using liner vs multiprocessing
 
         # clear old data
         self.hashes = dict()
@@ -463,6 +464,9 @@ class HashDuplicateFinderController(DuplicateFinderController):
             # set duplicates
             self.duplicate_images = [images for images in self.hashes.values() if len(images) > 1]
             # set state to finished and call finished event
+            # wait to set finished if user paused the operation
+            while self.state == 'stopped':
+                continue
             self.state = 'finished'
 
 
@@ -486,7 +490,7 @@ class GradientDuplicateFinderController(DuplicateFinderController):
             if self.state == 'canceled':
                 # stop the pool and exit the loop
                 pool.terminate()
-                return
+                return []
             else:
                 if result is not None:
                     # add gradient to lsit
@@ -502,46 +506,43 @@ class GradientDuplicateFinderController(DuplicateFinderController):
 
         return image_gradients
 
-    def _calculate_similarity(self, image_gradients):
+    def _get_duplicates_from_gradients(self, image_gradients):
+        # Add error handling for gradients param
+        if not image_gradients:
+            return []
+
         # update progress path
         self.progress.path = "Calculating similarities..."
 
-        # Create pool of images to compare
-        xtable_gradients = []
-        for i, (image1_gradient, image1_path) in enumerate(image_gradients):
-            for image2_gradient, image2_path in image_gradients[i+1:]:
-                xtable_gradients.append((image1_gradient, image1_path, image2_gradient, image2_path))
-
         # Create a union find data structure
+        union_find = UF(len(image_gradients))
         # Run over all the image pairings (O(n^2))
         # Calculate the % similarity in their image gradients
         # If they have a similarity > some factor
         #   perform union on the two images
-        image_index = {image_path: i for i, (_, image_path) in enumerate(image_gradients)}
-        union_find = UF(len(image_gradients))
-        pool = StoppablePool(fn=image_gradient.async_image_gradient_similarity, args=xtable_gradients, num_workers=self.num_threads)
-
-        for result in pool:
-            while self.state == 'stopped':
-                # Don't do anything else in the loop while stopped
-                continue
-            if self.state == 'canceled':
-                # stop the pool and exit the loop
-                pool.terminate()
-                return
-            else:
-                if result is not None:
-                    percentage, image1_path, image2_path = result
-
+        # TODO: look into if
+        #  for i,_ in enum(lst): for j,_ in enum(lst[i+1:]):
+        #  or for i,_ in enum(lst): for j,_ in enum(lst): if j>i:
+        #  is better practice
+        for i, (image1_gradient, image1_path) in enumerate(image_gradients):
+            for j, (image2_gradient, image2_path) in enumerate(image_gradients[i+1:]):
+                while self.state == 'stopped':
+                    # Don't do anything else in the loop while stopped
+                    continue
+                if self.state == 'canceled':
+                    # exit the loop
+                    return []
+                else:
+                    percentage = image_gradient.gradient_similarity(image1_gradient, image2_gradient)
                     if percentage > self.similarity_threshold:
-                        union_find.union(image_index[image1_path], image_index[image2_path])
+                        union_find.union(i, i+1+j)
 
-                # update progress index
-                self.progress.index += 1
+                    # update progress index
+                    self.progress.index += 1
 
         # Create list of duplicates from union_find data structure
         sets_of_images = dict()
-        for path, i in image_index.items():
+        for i, (_, path) in enumerate(image_gradients):
             set_id = union_find.find(i)
             p = sets_of_images.get(set_id, [])
             p.append(path)
@@ -551,6 +552,8 @@ class GradientDuplicateFinderController(DuplicateFinderController):
 
     def _find_duplicates(self, image_paths, **kwargs):
         # TODO: Add error handling for improper images or improper paths
+        # TODO: Compare timing of compute gradients using liner vs multiprocessing
+        # TODO: Compare timing of calculate similarity using one thread vs multiprocessing
 
         # clear old data
         image_count = len(image_paths)
@@ -561,7 +564,17 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         # Compute gradients for all images
         image_gradients = self._compute_gradients(image_paths)
 
-        # Find similarities
-        self.duplicate_images = self._calculate_similarity(image_gradients)
+        # stop if the user cancels
+        if self.state == 'canceled':
+            return
 
+        # Find similarities
+        self.duplicate_images = self._get_duplicates_from_gradients(image_gradients)
+
+        # stop if the user cancels
+        if self.state == 'canceled':
+            return
+        # wait to set finished if user paused the operation
+        while self.state == 'stopped':
+            continue
         self.state = 'finished'
