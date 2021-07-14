@@ -14,19 +14,26 @@ from src.duplicate_manager_screen import DuplicateManagerScreen
 from kivy.config import Config
 Config.set('graphics', 'fullscreen', '0')
 
+# TODO: Set custom window title and icon
+# TODO: Set custom taskbar icon
+# TODO: Figure out how to deploy this as an app
+# TODO: Change runmode to not be debug
+# TODO: Add integration/unit testing for GUI elements
+
 
 class Picture(Widget):
     source = StringProperty(None)
 
 
 class StartMenuScreen(Screen):
-    # TODO: Fix the buttons add name of software
+    # TODO: Add name of software
     # TODO: Fix file system with touch pad
     # TODO: Make directory selection a pop up
     # TODO: Add way to select multiple paths
     # TODO: Add way to include or not include subdirectories
     # TODO: Add progress bar pop up when finding images in each directory is taking a while
     # TODO: Add method selector
+    # TODO: Add configurations for different methods and a view for them
     def filter(self, directory, filename):
         return os.path.isdir(os.path.join(directory, filename))
 
