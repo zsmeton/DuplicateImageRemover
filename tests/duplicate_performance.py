@@ -9,6 +9,8 @@ from src import image_hashing, image_gradient
 # TODO: Create better printing system for near tests
 # TODO: Add graphing of values for near test (f1, confusion matrix)
 # TODO: Create more performance tests
+# TODO: Optional, improve design to remove model type interface
+
 
 class ModelType(Enum):
     PERFECT = 0
@@ -24,11 +26,11 @@ class DuplicateFinderModel:
 
     def score_perfect(self, images, actual_sims):
         sims = self.calculate_similarities(images)
-        true_positive, false_negative, false_positive, true_negative = self.calculate_score(sims, actual_sims)
+        tp, fn, fp, tn = DuplicateFinderModel._calculate_score(sims, actual_sims)
 
-        self._print_confusion(true_positive, false_negative, false_positive, true_negative)
+        self._print_confusion(tp, fn, fp, tn)
         print()
-        self._print_f1(true_positive, false_negative, false_positive)
+        self._print_f1(tp, fn, fp)
 
     def score_near(self, images, actual_sims):
         raise NotImplementedError()
@@ -45,7 +47,7 @@ class DuplicateFinderModel:
         raise NotImplementedError()
 
     @staticmethod
-    def calculate_score(model_sims, actual_sims):
+    def _calculate_score(model_sims, actual_sims):
         """
         Calculates the confusion matrix entries for the prediction
         Args:
@@ -73,7 +75,7 @@ class DuplicateFinderModel:
         return true_positive, false_negative, false_positive, true_negative
 
     @staticmethod
-    def calculate_f1(true_positive, false_negative, false_positive):
+    def _calculate_f1(true_positive, false_negative, false_positive):
         if true_positive < 0 or false_negative < 0 or false_positive < 0:
             raise ValueError("All metrics used to calculate the 1 score must be positive")
 
@@ -91,8 +93,8 @@ class DuplicateFinderModel:
 
     @staticmethod
     def _print_f1(true_positive, false_negative, false_positive, spacing=6):
-        f1 = DuplicateFinderModel.calculate_f1(true_positive, false_negative, false_positive)
-        print(f"{'f1:':{spacing}}", f1)
+        f1 = DuplicateFinderModel._calculate_f1(true_positive, false_negative, false_positive)
+        print(f"{'f1:':{spacing}}", f"{f1:1.2f}")
 
 
 class HashDuplicateFinderModel(DuplicateFinderModel):
@@ -150,7 +152,8 @@ class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel):
         for tolerance in self.tolerances:
             stepped_matrix = [[1 if similarity >= tolerance else 0 for similarity in row] for row in sims]
             print(f"tolerance: {tolerance:1.2f}")
-            true_positive, false_negative, false_positive, true_negative = self.calculate_score(stepped_matrix, actual_sims)
+            true_positive, false_negative, false_positive, true_negative = self._calculate_score(stepped_matrix,
+                                                                                                 actual_sims)
             self._print_confusion(true_positive, false_negative, false_positive, true_negative)
             print()
             self._print_f1(true_positive, false_negative, false_positive)
@@ -159,7 +162,7 @@ class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel):
 class GradientDuplicateFinderModel(ToleranceSimilarDuplicateFinderModel):
     name = "Gradient"
 
-    def __init__(self,  vector_size=8, name="Gradient", **kwargs):
+    def __init__(self, vector_size=8, name="Gradient", **kwargs):
         super().__init__(name=name, **kwargs)
         self.vector_size = vector_size
         self.gradients = []
@@ -200,7 +203,7 @@ class PerformanceTest:
         self.path_index = None
         # Read the data
         self._read_test()
-        # initialize images and matricies
+        # initialize images and matrices
         self._open_images()
         self._fill_perfect_matrix()
         self._fill_near_matrix()
@@ -273,7 +276,7 @@ class PerformanceTest:
         """
         similarity_matrix = np.zeros((len(self.image_paths), len(self.image_paths)))
 
-        # set similarity to one for all the duplicate image intersections above diagnol
+        # set similarity to one for all the duplicate image intersections above diagonal
         for duplicates in similar_idxs_list:
             for image1_idx in duplicates:
                 for image2_idx in duplicates:
@@ -352,9 +355,11 @@ if __name__ == "__main__":
     # Create models
     hash_model = HashDuplicateFinderModel()
     manager.add_model(hash_model)
-    grad_8_model = GradientDuplicateFinderModel(name="Gradient-8", tolerances=[.6,.7,.75,.8,.85,.9,.95,.98, 1.0])
+    grad_8_model = GradientDuplicateFinderModel(name="Gradient-8",
+                                                tolerances=[.6, .7, .75, .8, .85, .9, .95, .98, 1.0])
     manager.add_model(grad_8_model)
-    grad_32_model = GradientDuplicateFinderModel(name="Gradient-32", tolerances=[.6, .7, .75, .8, .85, .9, .95, .98, 1.0])
+    grad_32_model = GradientDuplicateFinderModel(name="Gradient-32",
+                                                 tolerances=[.6, .7, .75, .8, .85, .9, .95, .98, 1.0])
     manager.add_model(grad_32_model)
 
     # Create tests
