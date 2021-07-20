@@ -17,8 +17,10 @@ Config.set('graphics', 'fullscreen', '0')
 # TODO: Set custom window title and icon
 # TODO: Set custom taskbar icon
 # TODO: Figure out how to deploy this as an app
-# TODO: Change runmode to not be debug
+# TODO: Change run mode to not be debug
 # TODO: Add integration/unit testing for GUI elements
+# TODO: Figure out how to add file, edit, help bar
+# TODO: Add logging to various parts of the program
 
 
 class Picture(Widget):

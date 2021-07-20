@@ -23,10 +23,7 @@ from src.stoppable_pool import StoppablePool
 # TODO: Fix pooling so errors thrown in pool get handled (pop up for user or dismissed)
 # TODO: Add caching of info in duplicate controllers for if we cancel, change a param and re-run
 # TODO: Create a HOG based duplicate finder
-# TODO: Create n-dimensional neighbor/percentage based finder for efficient neighbor checking
-# TODO: Create duplicate finder base class for methods which use feature vectors
-# TODO: Create base function which takes data, a function, and performs StoppablePool
-#  with pause and cancel and returns result
+# TODO: Create n-dimensional neighbor/percentage based spatial tree for efficient neighbor checking
 
 
 class DuplicateFinderProgress(EventDispatcher):
@@ -570,7 +567,7 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         image_gradients = self._calculate_gradients(image_paths)
 
         # Check state logic
-        if self._should_stop_loop():
+        if not image_gradients or self._should_stop_loop():
             return
 
         # Find similarities
