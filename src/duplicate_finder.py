@@ -16,6 +16,10 @@ from kivy.factory import Factory
 from src import image_hashing, image_gradient, running_average
 from src.stoppable_pool import StoppablePool
 
+# Design
+# TODO: Improve layout progress, progress bar, and controller progress coupling
+# TODO: Separate into different folders
+
 # Features
 # TODO: Improve estimate time algorithm
 # TODO: Add back button
