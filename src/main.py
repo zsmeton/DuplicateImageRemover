@@ -3,7 +3,7 @@ from imutils import paths
 
 from kivy.app import App
 from kivy.uix.widget import Widget
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, ListProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
 
 from src.duplicate_finder import HashDuplicateFinderController, DuplicateFinderProgressLayout, \
@@ -41,14 +41,20 @@ class StartMenuScreen(Screen):
 
 
 class MyScreenManager(ScreenManager):
+    image_paths = ListProperty()
+    duplicate_images = ListProperty()
+
     def __init__(self, **kwargs):
         super(MyScreenManager, self).__init__(**kwargs)
-        self.add_widget(StartMenuScreen(name='start_menu'))
-        self.add_widget(DuplicateManagerScreen(name='manage_duplicates'))
+        self.start_screen = StartMenuScreen(name='start_menu')
         self.loading_screen = DuplicateFinderScreen(duplicate_finder_controller=GradientDuplicateFinderController(),
                                                     duplicate_finder_layout=DuplicateFinderEstimatingLayout(),
                                                     name='loading_screen')
+        self.manage_duplicates = DuplicateManagerScreen(name='manage_duplicates')
+
+        self.add_widget(self.start_screen)
         self.add_widget(self.loading_screen)
+        self.add_widget(self.manage_duplicates)
 
         # Set screen to start menu to start
         self.current = 'start_menu'
@@ -59,13 +65,15 @@ class MyScreenManager(ScreenManager):
     def start_search(self, search_directory):
         print(search_directory)
         # TODO: Add error handling
-        image_paths = list(paths.list_images(search_directory))
+        self.image_paths = list(paths.list_images(search_directory))
         self.current = 'loading_screen'
-        self.loading_screen.start_search(image_paths)
+        self.loading_screen.start_search(self.image_paths)
 
     def search_finished(self, duplicate_images):
         print(sum([len(elem) for elem in duplicate_images]), [len(elem) for elem in duplicate_images], duplicate_images)
+        self.duplicate_images = duplicate_images
         # TODO: Add error handling
+        self.manage_duplicates.duplicate_images = self.duplicate_images
         self.current = 'manage_duplicates'
 
 

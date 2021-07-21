@@ -1,8 +1,12 @@
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.label import Label
+from kivy.uix.relativelayout import RelativeLayout
+from kivy.uix.stacklayout import StackLayout
 from kivy.uix.widget import Widget
-from kivy.properties import BooleanProperty
+from kivy.properties import BooleanProperty, ObjectProperty, ListProperty
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.uix.recyclegridlayout import RecycleGridLayout
 from kivy.uix.gridlayout import GridLayout
@@ -13,6 +17,7 @@ from kivy.properties import StringProperty, NumericProperty
 
 from kivy.factory import Factory
 
+
 # Optional Hard-Feature
 # TODO: Add undo handling so if ctrl z is pressed the last action is undone \
 #  (for now that could be just restoring the most recently deleted images) \
@@ -20,7 +25,8 @@ from kivy.factory import Factory
 #  could load to screen resuming the session (in case of bad exit)
 
 # Features
-# TODO: Create selectable images class and add deletion of images when delete button pressed
+# TODO: Use async image and lazily load in the images
+# TODO: Add deletion of images when delete button pressed
 # TODO: Add slider to control image size
 # TODO: Add preview mode or detailed view mode (size, date created, etc)
 # TODO: Add clear selection button
@@ -30,19 +36,20 @@ from kivy.factory import Factory
 # Refactor
 # TODO: Restructure this code to be a better design pattern to follow the separation of concerns principle
 
-class SelectionRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
-                                 RecycleBoxLayout):
+
+class ImageGroupsLayout(FocusBehavior, LayoutSelectionBehavior,
+                        RecycleBoxLayout):
     ''' Adds selection and focus behaviour to the view. '''
 
 
-class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
+class ImageGroupDataView(RecycleDataViewBehavior, StackLayout):
     index = NumericProperty(0)  # The selection index for the widget in the recycle view
     selected = BooleanProperty(False)  # Whether the current view is selected or not
     selectable = BooleanProperty(True)  # Whether the current view can be selected
     widgetclass = StringProperty('None')  # The type of widgets this grid contains
 
     def __init__(self, **kwargs):
-        super(SelectableGridDataView, self).__init__(**kwargs)
+        super(ImageGroupDataView, self).__init__(**kwargs)
         self.selected_nodes = {}  # Dictionary of indexes to selected subwidgets
 
     def refresh_view_attrs(self, rv, index, data):
@@ -65,12 +72,12 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
         # Widgets
         self.clear_widgets()
         widget_type = Factory.get(self.widgetclass)  # Dynamically get the selection status based on the widget class
-        for i, kwargs in enumerate(data['data'][::-1]):
+        for i, kwargs in enumerate(data.get('data', [])):
             new_widget = widget_type(index=i, **kwargs)
             self.add_widget(new_widget, index=i)
             new_widget.apply_selection(i, i in self.selected_nodes[self.index])
 
-        return super(SelectableGridDataView, self).refresh_view_attrs(rv, index, data)
+        return super(ImageGroupDataView, self).refresh_view_attrs(rv, index, data)
 
     def select_with_touch(self, index, touch=None):
         """
@@ -143,32 +150,43 @@ class SelectableGridDataView(RecycleDataViewBehavior, GridLayout):
         rv.data[index]['selected'] = self.selected_nodes[index]
 
 
-class SelectableLabel(Label):
+class SelectableImage(RelativeLayout):
     ''' Add selection support to the Label '''
+    index = NumericProperty(0)
+    source = StringProperty()
     selected = BooleanProperty(False)
     selectable = BooleanProperty(True)
-    index = NumericProperty(0)
 
     def __init__(self, index, **kwargs):
-        super(SelectableLabel, self).__init__(**kwargs)
+        super(SelectableImage, self).__init__(**kwargs)
         self.index = index
 
     def on_touch_down(self, touch):
         ''' Add selection on touch down '''
-        if super(SelectableLabel, self).on_touch_down(touch):
+        if super(SelectableImage, self).on_touch_down(touch):
+            print("selecting image")
+            self.parent.select_with_touch(self.index, touch)
             return True
         if self.collide_point(*touch.pos) and self.selectable:
-            return self.parent.select_with_touch(self.index, touch)
+            print("detailing image")
+            return True
 
     def apply_selection(self, index, is_selected):
         ''' Respond to the selection of items in the view. '''
         self.selected = is_selected
 
 
-class DuplicateManager(RecycleView):
+class ImageGroupsRecycleView(RecycleView):
+    info_selection = ObjectProperty()
+    duplicate_images = ListProperty()
+
     def __init__(self, **kwargs):
-        super(DuplicateManager, self).__init__(**kwargs)
-        self.data = [{'data': [{'text': str(i)} for i in range(5)]} for x in range(100)]
+        super(ImageGroupsRecycleView, self).__init__(**kwargs)
+        self.data = []
+
+    def on_duplicate_images(self, *args):
+        self.data = [{'data': [{'source': image_path} for image_path in duplicate_group]}
+                     for duplicate_group in self.duplicate_images]
 
     def remove_selected(self):
         # Set data to data without selection
@@ -185,6 +203,4 @@ class DuplicateManager(RecycleView):
             self.layout_manager.deselect_node(select)
 
         self.data = new_data
-
-
 
