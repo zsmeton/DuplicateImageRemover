@@ -79,7 +79,8 @@
     size_hint: None, None
     height: 200
     width: image.image_ratio*root.height
-    Image:
+    on_selected: check.active = root.selected
+    AsyncImage:
         id: image
         source: root.source
     CheckBox:
@@ -97,7 +98,7 @@
     size_hint: 1, None
     height: self.minimum_height
     widgetclass: 'SelectableImage'
-    padding: 50
+    padding: 20
     spacing: 5
     multiselect: True
     touch_multiselect: True

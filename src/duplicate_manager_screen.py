@@ -20,7 +20,8 @@ if __name__ == "__main__":
             size_hint: None, None
             height: 200
             width: image.image_ratio*root.height
-            Image:
+            on_selected: check.active = root.selected
+            AsyncImage:
                 id: image
                 source: root.source
             CheckBox:
