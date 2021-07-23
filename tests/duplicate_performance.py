@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from enum import Enum
 import os
 import cv2
@@ -6,7 +7,8 @@ import itertools
 
 from src import image_hashing, image_gradient
 
-# TODO: Create better printing system for near tests
+
+# TODO: Create better class design for printing system for scoring (score class and collection of score class)
 # TODO: Add graphing of values for near test (f1, confusion matrix)
 # TODO: Create more performance tests
 # TODO: Optional, improve design to remove model type interface
@@ -17,7 +19,90 @@ class ModelType(Enum):
     NEAR = 1
 
 
-class DuplicateFinderModel:
+def calculate_score(model_sims, actual_sims):
+    """
+    Calculates the confusion matrix entries for the prediction
+    Args:
+        model_sims: models predicted similarity matrix all entries should be 0 or 1
+        actual_sims: actual similarity matrix all entries should be 0 or 1
+
+    Returns:
+        true_positive, false_negative, false_positive, true_negative
+    """
+    true_positive, false_negative, false_positive, true_negative = (0, 0, 0, 0)
+
+    for i, model_row in enumerate(model_sims):
+        for j, model_sim in enumerate(model_row):
+            if j > i:
+                actual_sim = actual_sims[i][j]
+                if model_sim >= 1 and actual_sim >= 1:
+                    true_positive += 1
+                elif model_sim < 1 and actual_sim >= 1:
+                    false_negative += 1
+                elif model_sim >= 1 and actual_sim < 1:
+                    false_positive += 1
+                else:
+                    true_negative += 1
+
+    return true_positive, false_negative, false_positive, true_negative
+
+
+def calculate_f1(true_positive, false_negative, false_positive):
+    if true_positive < 0 or false_negative < 0 or false_positive < 0:
+        raise ValueError("All metrics used to calculate the 1 score must be positive")
+
+    if true_positive + false_positive + false_negative == 0:
+        return 1
+
+    f1 = true_positive / (true_positive + 0.5 * (false_positive + false_negative))
+    return f1
+
+
+def get_confusion_lines(true_positive, false_negative, false_positive, true_negative, spacing=6):
+    line1 = f"{' ':{spacing}} {'PP':{spacing}} {'PN':{spacing}}"
+    line2 = f"{'AP':{spacing}} {str(true_positive):{spacing}} {str(false_negative):{spacing}}"
+    line3 = f"{'AN':{spacing}} {str(false_positive):{spacing}} {str(true_negative):{spacing}}"
+    return line1, line2, line3
+
+
+def print_confusion(true_positive, false_negative, false_positive, true_negative, spacing=6):
+    l1, l2, l3 = get_confusion_lines(true_positive=true_positive,
+                                     false_negative=false_negative,
+                                     false_positive=false_positive,
+                                     true_negative=true_negative,
+                                     spacing=6)
+    print(l1)
+    print(l2)
+    print(l3)
+
+
+def get_f1_line(true_positive, false_negative, false_positive, spacing=6):
+    f1 = calculate_f1(true_positive, false_negative, false_positive)
+    line = f"{'f1:':{spacing}} {f1:1.2f}"
+    return line
+
+
+def print_f1(true_positive: int, false_negative: int, false_positive: int, spacing: int = 6) -> None:
+    print(get_f1_line(true_positive=true_positive, false_negative=false_negative,
+                      false_positive=false_positive, spacing=spacing))
+
+
+def extend_score_line(lines: str, line: str, length: int, sep: str = "") -> str:
+    """
+    Appends 'line' onto 'lines' with spacing of 'length' and separator 'sep'
+    Args:
+        lines: the string to extend
+        line: the line to append
+        length: desired spacing (think table cell width)
+        sep: element to add to the end of lines
+    Returns:
+        extended line
+    """
+    lines += f"{line:{length}} {sep}"
+    return lines
+
+
+class DuplicateFinderModel(ABC):
     type = ModelType.PERFECT
 
     def __init__(self, name="Base Model", **kwargs):
@@ -26,15 +111,21 @@ class DuplicateFinderModel:
 
     def score_perfect(self, images, actual_sims):
         sims = self.calculate_similarities(images)
-        tp, fn, fp, tn = DuplicateFinderModel._calculate_score(sims, actual_sims)
+        tp, fn, fp, tn = calculate_score(sims, actual_sims)
 
-        self._print_confusion(tp, fn, fp, tn)
+        print_confusion(tp, fn, fp, tn)
         print()
-        self._print_f1(tp, fn, fp)
+        print_f1(tp, fn, fp)
 
     def score_near(self, images, actual_sims):
-        raise NotImplementedError()
+        sims = self.calculate_similarities(images)
+        tp, fn, fp, tn = calculate_score(sims, actual_sims)
 
+        print_confusion(tp, fn, fp, tn)
+        print()
+        print_f1(tp, fn, fp)
+
+    @abstractmethod
     def calculate_similarities(self, images):
         """
         Calculate the similarity between a set of images
@@ -45,56 +136,6 @@ class DuplicateFinderModel:
                 [[0, 1, 0.5],[0,0, 1],[0,0,0.8]]
         """
         raise NotImplementedError()
-
-    @staticmethod
-    def _calculate_score(model_sims, actual_sims):
-        """
-        Calculates the confusion matrix entries for the prediction
-        Args:
-            model_sims: models predicted similarity matrix all entries should be 0 or 1
-            actual_sims: actual similarity matrix all entries should be 0 or 1
-
-        Returns:
-            true_positive, false_negative, false_positive, true_negative
-        """
-        true_positive, false_negative, false_positive, true_negative = (0, 0, 0, 0)
-
-        for i, model_row in enumerate(model_sims):
-            for j, model_sim in enumerate(model_row):
-                if j > i:
-                    actual_sim = actual_sims[i][j]
-                    if model_sim >= 1 and actual_sim >= 1:
-                        true_positive += 1
-                    elif model_sim < 1 and actual_sim >= 1:
-                        false_negative += 1
-                    elif model_sim >= 1 and actual_sim < 1:
-                        false_positive += 1
-                    else:
-                        true_negative += 1
-
-        return true_positive, false_negative, false_positive, true_negative
-
-    @staticmethod
-    def _calculate_f1(true_positive, false_negative, false_positive):
-        if true_positive < 0 or false_negative < 0 or false_positive < 0:
-            raise ValueError("All metrics used to calculate the 1 score must be positive")
-
-        if true_positive + false_positive + false_negative == 0:
-            return 1
-
-        f1 = true_positive / (true_positive + 0.5 * (false_positive + false_negative))
-        return f1
-
-    @staticmethod
-    def _print_confusion(true_positive, false_negative, false_positive, true_negative, spacing=6):
-        print(" " * spacing, f"{'PP':{spacing}}", f"{'PN':{spacing}}")
-        print(f"{'AP':{spacing}}", f"{str(true_positive):{spacing}}", f"{str(false_negative):{spacing}}")
-        print(f"{'AN':{spacing}}", f"{str(false_positive):{spacing}}", f"{str(true_negative):{spacing}}")
-
-    @staticmethod
-    def _print_f1(true_positive, false_negative, false_positive, spacing=6):
-        f1 = DuplicateFinderModel._calculate_f1(true_positive, false_negative, false_positive)
-        print(f"{'f1:':{spacing}}", f"{f1:1.2f}")
 
 
 class HashDuplicateFinderModel(DuplicateFinderModel):
@@ -135,7 +176,7 @@ class HashDuplicateFinderModel(DuplicateFinderModel):
         return self._calculate_similarity_matrix_from_hashes(len(images))
 
 
-class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel):
+class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel, ABC):
     type = ModelType.NEAR
 
     def __init__(self, tolerances=None, name="Tolerance Base", **kwargs):
@@ -147,21 +188,46 @@ class ToleranceSimilarDuplicateFinderModel(DuplicateFinderModel):
     def score_near(self, images, actual_sims):
         # Calculate similarity matrix
         sims = self.calculate_similarities(images)
-        # For each tolerance run score_perfect on "stepped" sim matrix
+
+        # For each tolerance score and get confusion and f1 lines on "stepped" sim matrix
         # "Stepped" meaning if similarity > tolerance the cell is set to 1 and if not 0
-        for tolerance in self.tolerances:
+        tolerance_lines = ""
+        confusion_lines1 = ""
+        confusion_lines2 = ""
+        confusion_lines3 = ""
+        f1_lines = ""
+        for i, tolerance in enumerate(self.tolerances):
+            # Create stepped matrix and score
             stepped_matrix = [[1 if similarity >= tolerance else 0 for similarity in row] for row in sims]
-            print(f"tolerance: {tolerance:1.2f}")
-            true_positive, false_negative, false_positive, true_negative = self._calculate_score(stepped_matrix,
-                                                                                                 actual_sims)
-            self._print_confusion(true_positive, false_negative, false_positive, true_negative)
-            print()
-            self._print_f1(true_positive, false_negative, false_positive)
+            tp, fn, fp, tn = calculate_score(stepped_matrix, actual_sims)
+            # Generate confusion matrix, f1 score, and tolerance lines
+
+            # Tolerance
+            tolerance_line = f"tolerance: {tolerance:1.2f}"
+            # Confusion
+            confusion_l1, confusion_l2, confusion_l3 = \
+                get_confusion_lines(true_positive=tp, false_negative=fn, false_positive=fp, true_negative=tn)
+            # F1
+            f1_line = get_f1_line(true_positive=tp, false_negative=fn, false_positive=fp)
+
+            # Add all the line items to the lines
+            entry_length = max(len(confusion_l1), len(tolerance_line), len(f1_line))
+            sep = " " if i < len(self.tolerances) - 1 else ""
+            tolerance_lines = extend_score_line(tolerance_lines, tolerance_line, entry_length, sep)
+            confusion_lines1 = extend_score_line(confusion_lines1, confusion_l1, entry_length, sep)
+            confusion_lines2 = extend_score_line(confusion_lines2, confusion_l2, entry_length, sep)
+            confusion_lines3 = extend_score_line(confusion_lines3, confusion_l3, entry_length, sep)
+            f1_lines = extend_score_line(f1_lines, f1_line, entry_length, sep)
+
+        # Print the result
+        print(tolerance_lines)
+        print(confusion_lines1)
+        print(confusion_lines2)
+        print(confusion_lines3)
+        print(f1_lines)
 
 
 class GradientDuplicateFinderModel(ToleranceSimilarDuplicateFinderModel):
-    name = "Gradient"
-
     def __init__(self, vector_size=8, name="Gradient", **kwargs):
         super().__init__(name=name, **kwargs)
         self.vector_size = vector_size
@@ -286,12 +352,15 @@ class PerformanceTest:
         return similarity_matrix
 
     def _fill_perfect_matrix(self):
+        """
+        Creates and fills the values for the exact match similarity matrix
+        """
         # Set matrix to created perfect matrix
         self.perfect_matrix = self._get_similarity_matrix(self.duplicate_idxs_list)
 
     def _fill_near_matrix(self):
         """
-        Creates and fills the values for the nearly similar matrix
+        Creates and fills the values for the nearly similarity matrix
         """
         combined_near_perfect_idx = list(itertools.chain(self.duplicate_idxs_list, self.near_idxs_list))
         self.near_matrix = self._get_similarity_matrix(combined_near_perfect_idx)
@@ -312,14 +381,12 @@ class DuplicatePerformanceTestManager:
         self.tests = tests
 
     def add_model(self, model: DuplicateFinderModel):
-        # TODO: Error check argument is model
         self.models.append(model)
 
     def clear_models(self):
         self.models = []
 
     def add_test(self, test: PerformanceTest):
-        # TODO: Error check argument is test
         self.tests.append(test)
 
     def clear_tests(self):
