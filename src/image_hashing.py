@@ -1,4 +1,6 @@
 import cv2
+from kivy.logger import Logger
+
 
 # TODO: Add to unit tests
 
@@ -19,11 +21,16 @@ def dhash(image, hash_size=8):
 def async_open_and_hash(image_path, hash_size=8):
     # load the input image and compute the hash
     image = cv2.imread(image_path)
+    if image is None:
+        Logger.warning(f"Failed to load image {image_path}")
+        return None
+    image_ratio = image.shape[1] / image.shape[0]
     try:
-        hash_val = dhash(image,hash_size)
+        hash_val = dhash(image, hash_size)
     except cv2.error:
-        raise RuntimeError(f'Failed to hash image: {image}')
-    
+        Logger.warning(f'Failed to hash image: {image}')
+        return None
+
     # grab all image paths with that hash, add the current image
     # path to it, and store the list back in the hashes dictionary
-    return hash_val, image_path
+    return hash_val, image_path, image_ratio

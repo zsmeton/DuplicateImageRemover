@@ -78,16 +78,17 @@
 <SelectableImage>:
     size_hint: None, None
     height: 200
-    width: image.image_ratio*root.height
+    width: root.image_ratio*root.height
     on_selected: check.active = root.selected
     AsyncImage:
         id: image
         source: root.source
+        height: 200
     CheckBox:
         color: [1,1,1,1]
         background_checkbox_down: 'atlas://data/images/defaulttheme/checkbox_radio_on'
         background_checkbox_normal: 'atlas://data/images/defaulttheme/checkbox_radio_off'
-        pos_hint: {'x': 0.05, 'y': 0.9}
+        pos: 10, root.height-15
         size_hint: None, None
         size: 10, 10
         id: check

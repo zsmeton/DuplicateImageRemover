@@ -47,6 +47,7 @@ def calculate_gradient_vector(image, vector_size=8):
 def async_open_and_gradient(image_path, **kwargs):
     # load the input image and compute the hash
     image = cv2.imread(image_path)
+    image_ratio = image.shape[1] / image.shape[0]
     try:
         gradient_vector = calculate_gradient_vector(image, **kwargs)
     except cv2.error:
@@ -54,7 +55,7 @@ def async_open_and_gradient(image_path, **kwargs):
 
     # grab all image paths with that hash, add the current image
     # path to it, and store the list back in the hashes dictionary
-    return gradient_vector, image_path
+    return gradient_vector, image_path, image_ratio
 
 
 def gradient_similarity(image1_gradient, image2_gradient):

@@ -311,7 +311,7 @@ class DuplicateFinderController(RelativeLayout):
     def _find_duplicates(self, image_paths, **kwargs):
         """
         Finds all of the duplicate items in the image list and stores them in ``self.duplicate_images``
-        in the form of List[List[str]].
+        in the form of List[List[(str,ratio)].
 
         Called internally as a separate thread, should react to and set ``self.state``:
             ``stopped`` -> pause current action and resume when state changes to ``running``
@@ -332,11 +332,12 @@ class DuplicateFinderController(RelativeLayout):
         should be called for any loops in _find_duplicates
 
         Returns:
-            true if the loop should stop and return
+            true if the loop should exit and return
             false if the loop should continue
         """
         while self.state == 'stopped':
             # Don't do anything else in the loop while stopped
+            time.sleep(0.2)
             continue
         return self.state == 'canceled'
 
@@ -455,11 +456,11 @@ class HashDuplicateFinderController(DuplicateFinderController):
                 break
             else:
                 if result is not None:
-                    hash_val, image_path = result
+                    hash_val, image_path, ratio = result
                     # grab all image paths with that hash_val, add the current image
                     # path to it, and store the list back in the hashes dictionary
                     p = self.hashes.get(hash_val, [])
-                    p.append(image_path)
+                    p.append((image_path, ratio))
                     self.hashes[hash_val] = p
 
                     # update progress path
@@ -499,7 +500,7 @@ class GradientDuplicateFinderController(DuplicateFinderController):
                 return []
             elif result is not None:
                 # add gradient to list
-                _, image_path = result
+                _, image_path, _ = result
 
                 image_gradients.append(result)
 
@@ -529,27 +530,27 @@ class GradientDuplicateFinderController(DuplicateFinderController):
         #  for i,_ in enum(lst): for j,_ in enum(lst[i+1:]):
         #  or for i,_ in enum(lst): for j,_ in enum(lst): if j>i:
         #  is better practice
-        for i, (image1_gradient, image1_path) in enumerate(image_gradients):
-            for j, (image2_gradient, image2_path) in enumerate(image_gradients[i+1:]):
+        for i, (image1_gradient, image1_path, image1_ratio) in enumerate(image_gradients):
+            for j, (image2_gradient, image2_path, image2_ratio) in enumerate(image_gradients[i + 1:]):
                 if self._should_stop_loop():
                     return []
 
                 percentage = image_gradient.gradient_similarity(image1_gradient, image2_gradient)
                 if percentage > self.similarity_threshold:
-                    union_find.union(i, i+1+j)
+                    union_find.union(i, i + 1 + j)
 
                 # update progress index
                 self.progress.index += 1
 
         # Create list of duplicates from union_find data structure
         sets_of_images = dict()
-        for i, (_, path) in enumerate(image_gradients):
+        for i, (_, path, image_ratio) in enumerate(image_gradients):
             if self._should_stop_loop():
                 return []
 
             set_id = union_find.find(i)
             p = sets_of_images.get(set_id, [])
-            p.append(path)
+            p.append((path, image_ratio))
             sets_of_images[set_id] = p
 
         return [images for images in sets_of_images.values() if len(images) > 1]

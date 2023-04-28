@@ -1,21 +1,18 @@
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.floatlayout import FloatLayout
+import os
+
+from kivy.clock import Clock
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
-from kivy.uix.label import Label
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.stacklayout import StackLayout
-from kivy.uix.widget import Widget
 from kivy.properties import BooleanProperty, ObjectProperty, ListProperty
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.uix.recyclegridlayout import RecycleGridLayout
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.behaviors.compoundselection import CompoundSelectionBehavior
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.properties import StringProperty, NumericProperty
 
 from kivy.factory import Factory
+from kivy import Logger
 
 
 # Optional Hard-Feature
@@ -25,16 +22,18 @@ from kivy.factory import Factory
 #  could load to screen resuming the session (in case of bad exit)
 
 # Features
-# TODO: Use async image and lazily load in the images
 # TODO: Add deletion of images when delete button pressed
+#   but make sure that their is a debug mode of some sort where the images are not actually deleted
 # TODO: Add slider to control image size
 # TODO: Add preview mode or detailed view mode (size, date created, etc)
 # TODO: Add clear selection button
 # TODO: Add sorting button
 # TODO: Add back button
+# TODO: Custom checkbox so it is more visible on white images
 
-# Refactor
-# TODO: Restructure this code to be a better design pattern to follow the separation of concerns principle
+# Optimize
+# TODO: Find way to reduce impact of loading images on window speed (pre setting width/height, lazy do_layout, other)
+# TODO: Fix scroll bar issues when deleting images
 
 
 class ImageGroupsLayout(FocusBehavior, LayoutSelectionBehavior,
@@ -154,6 +153,7 @@ class SelectableImage(RelativeLayout):
     ''' Add selection support to the Label '''
     index = NumericProperty(0)
     source = StringProperty()
+    image_ratio = NumericProperty()
     selected = BooleanProperty(False)
     selectable = BooleanProperty(True)
 
@@ -164,11 +164,11 @@ class SelectableImage(RelativeLayout):
     def on_touch_down(self, touch):
         ''' Add selection on touch down '''
         if super(SelectableImage, self).on_touch_down(touch):
-            print("selecting image")
+            Logger.debug("selecting image")
             self.parent.select_with_touch(self.index, touch)
             return True
         if self.collide_point(*touch.pos) and self.selectable:
-            print("detailing image")
+            Logger.debug(f"detailing image: {self.source}")
             return True
 
     def apply_selection(self, index, is_selected):
@@ -183,9 +183,11 @@ class ImageGroupsRecycleView(RecycleView):
     def __init__(self, **kwargs):
         super(ImageGroupsRecycleView, self).__init__(**kwargs)
         self.data = []
+        self.images_to_remove = []
 
     def on_duplicate_images(self, *args):
-        self.data = [{'data': [{'source': image_path} for image_path in duplicate_group]}
+        self.data = [{'data': [{'source': image_path, 'image_ratio': image_ratio}
+                               for image_path, image_ratio in duplicate_group]}
                      for duplicate_group in self.duplicate_images]
 
     def remove_selected(self):
@@ -193,7 +195,13 @@ class ImageGroupsRecycleView(RecycleView):
         new_data = []
         for i, group in enumerate(self.data):
             unselected_data = [elem for i, elem in enumerate(group['data']) if i not in group.get('selected', set())]
-            if unselected_data:
+            selected_data = [elem for i, elem in enumerate(group['data']) if i in group.get('selected', set())]
+
+            for data in selected_data:
+                image_path, ratio = data.values()
+                self.images_to_remove.append(image_path)
+
+            if len(unselected_data) > 1:
                 new_group = {'data': unselected_data}
                 new_data.append(new_group)
 
@@ -203,4 +211,10 @@ class ImageGroupsRecycleView(RecycleView):
             self.layout_manager.deselect_node(select)
 
         self.data = new_data
+        Clock.schedule_once(self.remove_images)
 
+    def remove_images(self, dt):
+        for image_path in self.images_to_remove:
+            os.remove(image_path)
+
+        self.images_to_remove = []
